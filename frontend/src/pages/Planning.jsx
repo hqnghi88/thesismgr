@@ -7,7 +7,7 @@ const Planning = () => {
     const [loading, setLoading] = useState(false);
     const [editingSchedule, setEditingSchedule] = useState(null);
     const [professors, setProfessors] = useState([]);
-    const [viewMode, setViewMode] = useState('timetable'); // Default to timetable
+    const [viewMode, setViewMode] = useState('timetable');
     const [editForm, setEditForm] = useState({
         principal: '',
         examinator: '',
@@ -44,9 +44,9 @@ const Planning = () => {
     const handleEdit = (schedule) => {
         setEditingSchedule(schedule._id);
         setEditForm({
-            principal: schedule.principal._id,
-            examinator: schedule.examinator._id,
-            supervisor: schedule.supervisor._id,
+            principal: schedule.principal?._id || '',
+            examinator: schedule.examinator?._id || '',
+            supervisor: schedule.supervisor?._id || '',
             startTime: new Date(schedule.startTime).toISOString().slice(0, 16),
             endTime: new Date(schedule.endTime).toISOString().slice(0, 16),
             room: schedule.room
@@ -85,15 +85,14 @@ const Planning = () => {
         }
     };
 
-    // Quick update functions for inline editing
     const quickUpdateRoom = async (scheduleId, newRoom) => {
         try {
             const schedule = schedules.find(s => s._id === scheduleId);
             await axios.put(`${import.meta.env.VITE_API_URL}/api/schedule/${scheduleId}`, {
                 room: newRoom,
-                principal: schedule.principal._id,
-                examinator: schedule.examinator._id,
-                supervisor: schedule.supervisor._id,
+                principal: schedule.principal?._id,
+                examinator: schedule.examinator?._id,
+                supervisor: schedule.supervisor?._id,
                 startTime: schedule.startTime,
                 endTime: schedule.endTime
             }, {
@@ -111,7 +110,6 @@ const Planning = () => {
             const currentStart = new Date(schedule.startTime);
             const currentEnd = new Date(schedule.endTime);
 
-            // Shift by 35 minutes
             currentStart.setMinutes(currentStart.getMinutes() + (timeShift * 35));
             currentEnd.setMinutes(currentEnd.getMinutes() + (timeShift * 35));
 
@@ -119,9 +117,9 @@ const Planning = () => {
                 startTime: currentStart.toISOString(),
                 endTime: currentEnd.toISOString(),
                 room: schedule.room,
-                principal: schedule.principal._id,
-                examinator: schedule.examinator._id,
-                supervisor: schedule.supervisor._id
+                principal: schedule.principal?._id,
+                examinator: schedule.examinator?._id,
+                supervisor: schedule.supervisor?._id
             }, {
                 headers: { Authorization: `Bearer ${token}` },
             });
@@ -135,9 +133,9 @@ const Planning = () => {
         try {
             const schedule = schedules.find(s => s._id === scheduleId);
             const updates = {
-                principal: schedule.principal._id,
-                examinator: schedule.examinator._id,
-                supervisor: schedule.supervisor._id,
+                principal: schedule.principal?._id,
+                examinator: schedule.examinator?._id,
+                supervisor: schedule.supervisor?._id,
                 startTime: schedule.startTime,
                 endTime: schedule.endTime,
                 room: schedule.room
@@ -181,9 +179,10 @@ const Planning = () => {
     const handleAutoPlan = async () => {
         setLoading(true);
         try {
-            await axios.post(`${import.meta.env.VITE_API_URL}/api/schedule/auto-plan`, {}, {
+            const res = await axios.post(`${import.meta.env.VITE_API_URL}/api/schedule/auto-plan`, {}, {
                 headers: { Authorization: `Bearer ${token}` },
             });
+            alert(`${res.data.message}\n- Newly Scheduled: ${res.data.scheduled}\n- Fixed/Updated: ${res.data.fixed}`);
             fetchSchedules();
         } catch (err) {
             alert(err.response?.data?.message || "Error during planning");
@@ -216,227 +215,120 @@ const Planning = () => {
         fetchProfessors();
     }, []);
 
-    // Timetable view logic
     const generateTimetable = () => {
-        const rooms = [...new Set(schedules.map(s => s.room))].sort();
-        const timeSlots = [...new Set(schedules.map(s => new Date(s.startTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })))].sort();
+        const availableRooms = ["Room 110/DI", "Room 111/DI", "Room 112/DI", "Room 113/DI"];
+        const dates = [...new Set(schedules.map(s => new Date(s.startTime).toLocaleDateString()))].sort();
 
-        const timetableData = {};
-        schedules.forEach(schedule => {
-            const time = new Date(schedule.startTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
-            const room = schedule.room;
-            const key = `${time}-${room}`;
-            timetableData[key] = schedule;
+        return dates.map(date => {
+            const daySchedules = schedules.filter(s => new Date(s.startTime).toLocaleDateString() === date);
+            const roomsFromSchedules = [...new Set(daySchedules.map(s => s.room))];
+            const rooms = [...new Set([...availableRooms, ...roomsFromSchedules])].sort();
+
+            const timeSlots = [...new Set(daySchedules.map(s => {
+                const d = new Date(s.startTime);
+                return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+            }))].sort();
+
+            const timetableData = {};
+            daySchedules.forEach(schedule => {
+                const time = new Date(schedule.startTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+                timetableData[`${time}-${schedule.room}`] = schedule;
+            });
+
+            return { date, rooms, timeSlots, timetableData };
         });
-
-        return { rooms, timeSlots, timetableData };
     };
 
-    const { rooms, timeSlots, timetableData } = generateTimetable();
-    const availableRooms = ["Room 110/DI", "Room 111/DI"];
+    const dayWiseTimetables = generateTimetable();
+    const availableRooms = ["Room 110/DI", "Room 111/DI", "Room 112/DI", "Room 113/DI"];
 
     return (
         <Container fluid className="py-4" style={{ marginTop: '70px', backgroundColor: '#f8f9fa', minHeight: '100vh' }}>
             <Container fluid>
-                <h2 className="mb-4 fw-bold">📅 Jury Planning</h2>
+                <div className="d-flex justify-content-between align-items-center mb-4">
+                    <h2 className="fw-bold m-0">📅 Jury Planning</h2>
+                    <ButtonGroup size="sm">
+                        <Button variant={viewMode === 'timetable' ? 'primary' : 'outline-primary'} onClick={() => setViewMode('timetable')}>📊 Timetable</Button>
+                        <Button variant={viewMode === 'cards' ? 'primary' : 'outline-primary'} onClick={() => setViewMode('cards')}>📋 List View</Button>
+                    </ButtonGroup>
+                </div>
 
-                {/* Action Buttons */}
                 <Card className="border-0 shadow-sm mb-4">
-                    <Card.Body>
-                        <Row className="align-items-center">
-                            <Col xs={12} md="auto" className="mb-3 mb-md-0">
-                                <div className="d-flex gap-2 flex-wrap">
-                                    <Button
-                                        variant="success"
-                                        onClick={handleAutoPlan}
-                                        disabled={loading}
-                                    >
-                                        {loading ? "Planning..." : "🤖 Run Auto-Planning"}
-                                    </Button>
-                                    <Button variant="outline-danger" onClick={handleDeleteAllSchedules}>
-                                        🗑️ Clear All Planned
-                                    </Button>
-                                    <Button variant="primary" onClick={handleExport}>
-                                        📥 Export to Excel
-                                    </Button>
-                                </div>
-                            </Col>
-                            <Col xs={12} md="auto" className="ms-md-auto">
-                                <div className="d-flex align-items-center gap-2">
-                                    <span className="small fw-semibold text-muted">View:</span>
-                                    <ButtonGroup size="sm">
-                                        <Button
-                                            variant={viewMode === 'cards' ? 'primary' : 'outline-primary'}
-                                            onClick={() => setViewMode('cards')}
-                                        >
-                                            📋 Cards
-                                        </Button>
-                                        <Button
-                                            variant={viewMode === 'timetable' ? 'primary' : 'outline-primary'}
-                                            onClick={() => setViewMode('timetable')}
-                                        >
-                                            📊 Timetable
-                                        </Button>
-                                    </ButtonGroup>
-                                </div>
-                            </Col>
-                        </Row>
+                    <Card.Body className="d-flex gap-2 flex-wrap">
+                        <Button variant="success" onClick={handleAutoPlan} disabled={loading}>{loading ? "Planning..." : "🤖 Run Auto-Planning"}</Button>
+                        <Button variant="outline-danger" onClick={handleDeleteAllSchedules}>🗑️ Clear All</Button>
+                        <Button variant="primary" onClick={handleExport}>📥 Export Excel</Button>
                     </Card.Body>
                 </Card>
 
-                {/* Edit Modal */}
                 <Modal show={editingSchedule !== null} onHide={handleCancelEdit} size="lg">
-                    <Modal.Header closeButton>
-                        <Modal.Title>Edit Schedule</Modal.Title>
-                    </Modal.Header>
+                    <Modal.Header closeButton><Modal.Title>Edit Schedule</Modal.Title></Modal.Header>
                     <Modal.Body>
                         {error && <Alert variant="danger">{error}</Alert>}
                         <Form onSubmit={handleUpdateSchedule}>
                             <Row>
                                 <Col md={6} className="mb-3">
-                                    <Form.Group>
-                                        <Form.Label className="fw-semibold">Principal</Form.Label>
-                                        <Form.Select
-                                            value={editForm.principal}
-                                            onChange={(e) => setEditForm({ ...editForm, principal: e.target.value })}
-                                            required
-                                        >
-                                            <option value="">Select Principal</option>
-                                            {professors.map(prof => (
-                                                <option key={prof._id} value={prof._id}>{prof.name}</option>
-                                            ))}
-                                        </Form.Select>
-                                    </Form.Group>
+                                    <Form.Label className="fw-semibold">Principal</Form.Label>
+                                    <Form.Select value={editForm.principal} onChange={(e) => setEditForm({ ...editForm, principal: e.target.value })} required>
+                                        <option value="">Select Principal</option>
+                                        {professors.map(p => <option key={p._id} value={p._id}>{p.name}</option>)}
+                                    </Form.Select>
                                 </Col>
                                 <Col md={6} className="mb-3">
-                                    <Form.Group>
-                                        <Form.Label className="fw-semibold">Examinator</Form.Label>
-                                        <Form.Select
-                                            value={editForm.examinator}
-                                            onChange={(e) => setEditForm({ ...editForm, examinator: e.target.value })}
-                                            required
-                                        >
-                                            <option value="">Select Examinator</option>
-                                            {professors.map(prof => (
-                                                <option key={prof._id} value={prof._id}>{prof.name}</option>
-                                            ))}
-                                        </Form.Select>
-                                    </Form.Group>
+                                    <Form.Label className="fw-semibold">Examinator</Form.Label>
+                                    <Form.Select value={editForm.examinator} onChange={(e) => setEditForm({ ...editForm, examinator: e.target.value })} required>
+                                        <option value="">Select Examinator</option>
+                                        {professors.map(p => <option key={p._id} value={p._id}>{p.name}</option>)}
+                                    </Form.Select>
                                 </Col>
                                 <Col md={6} className="mb-3">
-                                    <Form.Group>
-                                        <Form.Label className="fw-semibold">Supervisor</Form.Label>
-                                        <Form.Select
-                                            value={editForm.supervisor}
-                                            onChange={(e) => setEditForm({ ...editForm, supervisor: e.target.value })}
-                                            required
-                                        >
-                                            <option value="">Select Supervisor</option>
-                                            {professors.map(prof => (
-                                                <option key={prof._id} value={prof._id}>{prof.name}</option>
-                                            ))}
-                                        </Form.Select>
-                                    </Form.Group>
+                                    <Form.Label className="fw-semibold">Supervisor</Form.Label>
+                                    <Form.Select value={editForm.supervisor} onChange={(e) => setEditForm({ ...editForm, supervisor: e.target.value })} required>
+                                        <option value="">Select Supervisor</option>
+                                        {professors.map(p => <option key={p._id} value={p._id}>{p.name}</option>)}
+                                    </Form.Select>
                                 </Col>
                                 <Col md={6} className="mb-3">
-                                    <Form.Group>
-                                        <Form.Label className="fw-semibold">Room</Form.Label>
-                                        <Form.Control
-                                            type="text"
-                                            value={editForm.room}
-                                            onChange={(e) => setEditForm({ ...editForm, room: e.target.value })}
-                                            required
-                                        />
-                                    </Form.Group>
+                                    <Form.Label className="fw-semibold">Room</Form.Label>
+                                    <Form.Control type="text" value={editForm.room} onChange={(e) => setEditForm({ ...editForm, room: e.target.value })} required />
                                 </Col>
                                 <Col md={6} className="mb-3">
-                                    <Form.Group>
-                                        <Form.Label className="fw-semibold">Start Time</Form.Label>
-                                        <Form.Control
-                                            type="datetime-local"
-                                            value={editForm.startTime}
-                                            onChange={(e) => setEditForm({ ...editForm, startTime: e.target.value })}
-                                            required
-                                        />
-                                    </Form.Group>
+                                    <Form.Label className="fw-semibold">Start Time</Form.Label>
+                                    <Form.Control type="datetime-local" value={editForm.startTime} onChange={(e) => setEditForm({ ...editForm, startTime: e.target.value })} required />
                                 </Col>
                                 <Col md={6} className="mb-3">
-                                    <Form.Group>
-                                        <Form.Label className="fw-semibold">End Time</Form.Label>
-                                        <Form.Control
-                                            type="datetime-local"
-                                            value={editForm.endTime}
-                                            onChange={(e) => setEditForm({ ...editForm, endTime: e.target.value })}
-                                            required
-                                        />
-                                    </Form.Group>
+                                    <Form.Label className="fw-semibold">End Time</Form.Label>
+                                    <Form.Control type="datetime-local" value={editForm.endTime} onChange={(e) => setEditForm({ ...editForm, endTime: e.target.value })} required />
                                 </Col>
                             </Row>
-                            <div className="d-flex gap-2 justify-content-end">
-                                <Button variant="secondary" onClick={handleCancelEdit}>
-                                    Cancel
-                                </Button>
-                                <Button variant="success" type="submit">
-                                    Update Schedule
-                                </Button>
+                            <div className="d-flex gap-2 justify-content-end mt-3">
+                                <Button variant="secondary" onClick={handleCancelEdit}>Cancel</Button>
+                                <Button variant="success" type="submit">Update Schedule</Button>
                             </div>
                         </Form>
                     </Modal.Body>
                 </Modal>
 
-                {/* Cards View */}
                 {viewMode === 'cards' && (
                     <Row className="g-4">
                         {schedules.map((schedule) => (
                             <Col key={schedule._id} lg={6} xl={4}>
                                 <Card className="border-0 shadow-sm h-100 border-start border-success border-4">
                                     <Card.Body>
-                                        <h5 className="fw-bold mb-3">📅 {schedule.thesis?.title || "Untitled Thesis"}</h5>
-
-                                        <div className="mb-3">
-                                            <div className="d-flex justify-content-between mb-2">
-                                                <span className="fw-semibold">Room:</span>
-                                                <Badge bg="info">{schedule.room}</Badge>
-                                            </div>
-                                            <div className="small text-muted">
-                                                <div><strong>Start:</strong> {new Date(schedule.startTime).toLocaleString()}</div>
-                                                <div><strong>End:</strong> {new Date(schedule.endTime).toLocaleTimeString()}</div>
-                                            </div>
+                                        <h5 className="fw-bold mb-3">📅 {schedule.thesis?.title || "Untitled"}</h5>
+                                        <div className="mb-3 small text-muted">
+                                            <div className="d-flex justify-content-between mb-1"><strong>Room:</strong> <Badge bg="info">{schedule.room}</Badge></div>
+                                            <div><strong>Start:</strong> {new Date(schedule.startTime).toLocaleString()}</div>
                                         </div>
-
-                                        <div className="mb-3">
-                                            <h6 className="fw-semibold mb-2">Jury Composition:</h6>
-                                            <ListGroup variant="flush" className="small">
-                                                <ListGroup.Item className="px-0 py-1 border-0">
-                                                    👤 <strong>Student:</strong> {schedule.student?.name || "⚠️ Missing student"}
-                                                </ListGroup.Item>
-                                                <ListGroup.Item className="px-0 py-1 border-0">
-                                                    👨‍🏫 <strong>Supervisor:</strong> {schedule.supervisor?.name || "⚠️ Missing supervisor"}
-                                                </ListGroup.Item>
-                                                <ListGroup.Item className="px-0 py-1 border-0">
-                                                    🎯 <strong>Principal:</strong> {schedule.principal?.name || "⚠️ Missing principal"}
-                                                </ListGroup.Item>
-                                                <ListGroup.Item className="px-0 py-1 border-0">
-                                                    🔍 <strong>Examinator:</strong> {schedule.examinator?.name || "⚠️ Missing examinator"}
-                                                </ListGroup.Item>
-                                            </ListGroup>
-                                        </div>
-
+                                        <ListGroup variant="flush" className="small mb-3">
+                                            <ListGroup.Item className="px-0 py-1 border-0">👤 <strong>Student:</strong> {schedule.student?.name}</ListGroup.Item>
+                                            <ListGroup.Item className="px-0 py-1 border-0">👨‍🏫 <strong>SV:</strong> {schedule.supervisor?.name}</ListGroup.Item>
+                                            <ListGroup.Item className="px-0 py-1 border-0">🎯 <strong>PR:</strong> {schedule.principal?.name}</ListGroup.Item>
+                                            <ListGroup.Item className="px-0 py-1 border-0">🔍 <strong>EX:</strong> {schedule.examinator?.name}</ListGroup.Item>
+                                        </ListGroup>
                                         <div className="d-flex gap-2">
-                                            <Button
-                                                variant="outline-primary"
-                                                size="sm"
-                                                onClick={() => handleEdit(schedule)}
-                                            >
-                                                ✏️ Edit
-                                            </Button>
-                                            <Button
-                                                variant="outline-danger"
-                                                size="sm"
-                                                onClick={() => handleDelete(schedule._id)}
-                                            >
-                                                🗑️ Remove
-                                            </Button>
+                                            <Button variant="outline-primary" size="sm" onClick={() => handleEdit(schedule)}>✏️ Edit</Button>
+                                            <Button variant="outline-danger" size="sm" onClick={() => handleDelete(schedule._id)}>🗑️ Remove</Button>
                                         </div>
                                     </Card.Body>
                                 </Card>
@@ -445,177 +337,73 @@ const Planning = () => {
                     </Row>
                 )}
 
-                {/* Timetable View with Quick Actions */}
                 {viewMode === 'timetable' && (
-                    <Card className="border-0 shadow-sm">
-                        <Card.Body className="p-0">
-                            <div className="table-responsive">
-                                <Table bordered hover className="mb-0">
-                                    <thead className="table-primary">
-                                        <tr>
-                                            <th className="text-center" style={{ minWidth: '100px' }}>Time</th>
-                                            {rooms.map(room => (
-                                                <th key={room} className="text-center" style={{ minWidth: '350px' }}>
-                                                    {room}
-                                                </th>
-                                            ))}
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {timeSlots.map(time => (
-                                            <tr key={time}>
-                                                <td className="text-center fw-bold align-middle bg-light">
-                                                    {time}
-                                                </td>
-                                                {rooms.map(room => {
-                                                    const schedule = timetableData[`${time}-${room}`];
-                                                    return (
-                                                        <td key={`${time}-${room}`} className="p-2">
-                                                            {schedule ? (
-                                                                <div className="small">
-                                                                    <div className="fw-bold text-primary mb-1">
-                                                                        {schedule.thesis?.title}
-                                                                    </div>
-                                                                    <div className="text-muted mb-2" style={{ fontSize: '0.85rem' }}>
-                                                                        <div>👤 {schedule.student?.name}</div>
-                                                                        <div className="d-flex align-items-center gap-1">
-                                                                            👨‍🏫
-                                                                            <Dropdown size="sm" className="d-inline">
-                                                                                <Dropdown.Toggle variant="link" className="p-0 text-decoration-none text-muted" style={{ fontSize: '0.85rem' }}>
-                                                                                    {schedule.supervisor?.name || <span className="text-danger fw-bold">⚠️ Missing SV</span>}
-                                                                                </Dropdown.Toggle>
-                                                                                <Dropdown.Menu>
-                                                                                    {professors.filter(prof =>
-                                                                                        prof._id !== schedule.principal?._id &&
-                                                                                        prof._id !== schedule.examinator?._id
-                                                                                    ).map(prof => (
-                                                                                        <Dropdown.Item
-                                                                                            key={prof._id}
-                                                                                            onClick={() => quickSwapProfessor(schedule._id, 'supervisor', prof._id)}
-                                                                                            active={prof._id === schedule.supervisor?._id}
-                                                                                        >
-                                                                                            {prof.name}
-                                                                                        </Dropdown.Item>
-                                                                                    ))}
-                                                                                </Dropdown.Menu>
-                                                                            </Dropdown>
+                    <div className="d-flex flex-column gap-5">
+                        {dayWiseTimetables.map(({ date, rooms, timeSlots, timetableData }) => (
+                            <div key={date}>
+                                <h4 className="fw-bold mb-3 text-secondary border-bottom pb-2">🗓️ Schedule for {date}</h4>
+                                <Card className="border-0 shadow-sm overflow-hidden">
+                                    <div className="table-responsive">
+                                        <Table bordered hover size="sm" className="mb-0 text-center bg-white">
+                                            <thead className="table-dark">
+                                                <tr>
+                                                    <th style={{ width: '80px', fontSize: '0.8rem' }}>Time</th>
+                                                    {rooms.map(room => (
+                                                        <th key={room} style={{ minWidth: '220px', fontSize: '0.8rem' }}>{room}</th>
+                                                    ))}
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {timeSlots.map(time => (
+                                                    <tr key={time}>
+                                                        <td className="fw-bold align-middle bg-light small" style={{ fontSize: '0.75rem' }}>{time}</td>
+                                                        {rooms.map(room => {
+                                                            const s = timetableData[`${time}-${room}`];
+                                                            return (
+                                                                <td key={`${time}-${room}`} className="p-1 align-middle" style={{ height: '140px' }}>
+                                                                    {s ? (
+                                                                        <div className="text-start p-2 rounded h-100 d-flex flex-column justify-content-between shadow-sm border-start border-3 border-primary" style={{ backgroundColor: '#fff', fontSize: '0.72rem' }}>
+                                                                            <div>
+                                                                                <div className="fw-bold text-primary mb-1" style={{ display: '-webkit-box', WebkitLineClamp: '2', WebkitBoxOrient: 'vertical', overflow: 'hidden', lineHeight: '1.2' }}>{s.thesis?.title}</div>
+                                                                                <div className="text-muted">
+                                                                                    <div className="text-truncate">👤 <strong>{s.student?.name}</strong></div>
+                                                                                    <div className="d-flex flex-column">
+                                                                                        <span>👨‍🏫 {s.supervisor?.name?.split(' ').pop()}</span>
+                                                                                        <span>🎯 {s.principal?.name?.split(' ').pop()}</span>
+                                                                                        <span>🔍 {s.examinator?.name?.split(' ').pop()}</span>
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                            <div className="d-flex gap-1 pt-1 mt-1 border-top align-items-center">
+                                                                                <Dropdown size="sm">
+                                                                                    <Dropdown.Toggle variant="outline-secondary" size="sm" className="border-0 px-1 py-0">🏢</Dropdown.Toggle>
+                                                                                    <Dropdown.Menu className="shadow border-0">
+                                                                                        {availableRooms.map(r => <Dropdown.Item key={r} onClick={() => quickUpdateRoom(s._id, r)} active={r === s.room}>{r}</Dropdown.Item>)}
+                                                                                    </Dropdown.Menu>
+                                                                                </Dropdown>
+                                                                                <ButtonGroup size="sm">
+                                                                                    <Button variant="outline-secondary" className="border-0 px-1 py-0" onClick={() => quickUpdateTime(s._id, -1)}>⬅️</Button>
+                                                                                    <Button variant="outline-secondary" className="border-0 px-1 py-0" onClick={() => quickUpdateTime(s._id, 1)}>➡️</Button>
+                                                                                </ButtonGroup>
+                                                                                <Button variant="outline-danger" size="sm" className="border-0 px-1 py-0 ms-auto" onClick={() => handleDelete(s._id)}>🗑️</Button>
+                                                                            </div>
                                                                         </div>
-                                                                        <div className="d-flex align-items-center gap-1">
-                                                                            🎯
-                                                                            <Dropdown size="sm" className="d-inline">
-                                                                                <Dropdown.Toggle variant="link" className="p-0 text-decoration-none text-muted" style={{ fontSize: '0.85rem' }}>
-                                                                                    {schedule.principal?.name || <span className="text-danger fw-bold">⚠️ Missing PR</span>}
-                                                                                </Dropdown.Toggle>
-                                                                                <Dropdown.Menu>
-                                                                                    {professors.filter(prof =>
-                                                                                        prof._id !== schedule.supervisor?._id &&
-                                                                                        prof._id !== schedule.examinator?._id
-                                                                                    ).map(prof => (
-                                                                                        <Dropdown.Item
-                                                                                            key={prof._id}
-                                                                                            onClick={() => quickSwapProfessor(schedule._id, 'principal', prof._id)}
-                                                                                            active={prof._id === schedule.principal?._id}
-                                                                                        >
-                                                                                            {prof.name}
-                                                                                        </Dropdown.Item>
-                                                                                    ))}
-                                                                                </Dropdown.Menu>
-                                                                            </Dropdown>
-                                                                        </div>
-                                                                        <div className="d-flex align-items-center gap-1">
-                                                                            🔍
-                                                                            <Dropdown size="sm" className="d-inline">
-                                                                                <Dropdown.Toggle variant="link" className="p-0 text-decoration-none text-muted" style={{ fontSize: '0.85rem' }}>
-                                                                                    {schedule.examinator?.name || <span className="text-danger fw-bold">⚠️ Missing EX</span>}
-                                                                                </Dropdown.Toggle>
-                                                                                <Dropdown.Menu>
-                                                                                    {professors.filter(prof =>
-                                                                                        prof._id !== schedule.supervisor?._id &&
-                                                                                        prof._id !== schedule.principal?._id
-                                                                                    ).map(prof => (
-                                                                                        <Dropdown.Item
-                                                                                            key={prof._id}
-                                                                                            onClick={() => quickSwapProfessor(schedule._id, 'examinator', prof._id)}
-                                                                                            active={prof._id === schedule.examinator?._id}
-                                                                                        >
-                                                                                            {prof.name}
-                                                                                        </Dropdown.Item>
-                                                                                    ))}
-                                                                                </Dropdown.Menu>
-                                                                            </Dropdown>
-                                                                        </div>
-                                                                    </div>
-                                                                    <div className="d-flex gap-1 flex-wrap">
-                                                                        <Dropdown size="sm">
-                                                                            <Dropdown.Toggle variant="outline-secondary" size="sm">
-                                                                                🏢
-                                                                            </Dropdown.Toggle>
-                                                                            <Dropdown.Menu>
-                                                                                {availableRooms.map(r => (
-                                                                                    <Dropdown.Item
-                                                                                        key={r}
-                                                                                        onClick={() => quickUpdateRoom(schedule._id, r)}
-                                                                                        active={r === schedule.room}
-                                                                                    >
-                                                                                        {r}
-                                                                                    </Dropdown.Item>
-                                                                                ))}
-                                                                            </Dropdown.Menu>
-                                                                        </Dropdown>
-                                                                        <Button
-                                                                            variant="outline-info"
-                                                                            size="sm"
-                                                                            onClick={() => quickUpdateTime(schedule._id, -1)}
-                                                                            title="Move earlier"
-                                                                        >
-                                                                            ⬆️
-                                                                        </Button>
-                                                                        <Button
-                                                                            variant="outline-info"
-                                                                            size="sm"
-                                                                            onClick={() => quickUpdateTime(schedule._id, 1)}
-                                                                            title="Move later"
-                                                                        >
-                                                                            ⬇️
-                                                                        </Button>
-                                                                        <Button
-                                                                            variant="outline-primary"
-                                                                            size="sm"
-                                                                            onClick={() => handleEdit(schedule)}
-                                                                        >
-                                                                            ✏️
-                                                                        </Button>
-                                                                        <Button
-                                                                            variant="outline-danger"
-                                                                            size="sm"
-                                                                            onClick={() => handleDelete(schedule._id)}
-                                                                        >
-                                                                            🗑️
-                                                                        </Button>
-                                                                    </div>
-                                                                </div>
-                                                            ) : (
-                                                                <div className="text-center text-muted small">
-                                                                    —
-                                                                </div>
-                                                            )}
-                                                        </td>
-                                                    );
-                                                })}
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </Table>
+                                                                    ) : null}
+                                                                </td>
+                                                            );
+                                                        })}
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </Table>
+                                    </div>
+                                </Card>
                             </div>
-                        </Card.Body>
-                    </Card>
+                        ))}
+                    </div>
                 )}
 
-                {schedules.length === 0 && (
-                    <Alert variant="info" className="text-center">
-                        No schedules planned yet. Click "Run Auto-Planning" to generate schedules automatically!
-                    </Alert>
-                )}
+                {schedules.length === 0 && !loading && <Alert variant="info" className="text-center mt-4">No schedules planned yet. Click "Run Auto-Planning" to generate schedules!</Alert>}
             </Container>
         </Container>
     );

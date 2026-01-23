@@ -2,38 +2,53 @@ const Schedule = require("../models/Schedule");
 const Thesis = require("../models/Thesis");
 const User = require("../models/User");
 const xlsx = require("xlsx");
+const mongoose = require("mongoose");
 
 const getConflicts = async (startTime, room, principalId, examinatorId, supervisorId, excludeScheduleId = null) => {
-    const query = {
-        startTime,
-        _id: { $ne: excludeScheduleId }
-    };
+    try {
+        const query = {
+            startTime,
+            _id: { $ne: excludeScheduleId }
+        };
 
-    const existing = await Schedule.find(query);
+        const existing = await Schedule.find(query);
 
-    const conflicts = {
-        room: false,
-        profs: []
-    };
+        const conflicts = {
+            room: false,
+            profs: []
+        };
 
-    const newProfs = [principalId?.toString(), examinatorId?.toString(), supervisorId?.toString()].filter(Boolean);
+        // Normalize new IDs
+        const newProfs = [principalId, examinatorId, supervisorId]
+            .map(p => p?.toString())
+            .filter(p => p && mongoose.Types.ObjectId.isValid(p));
 
-    existing.forEach(s => {
-        if (room && s.room === room) conflicts.room = true;
+        existing.forEach(s => {
+            if (room && s.room === room) conflicts.room = true;
 
-        const busyProfs = [s.principal.toString(), s.examinator.toString(), s.supervisor.toString()];
-        newProfs.forEach(p => {
-            if (busyProfs.includes(p) && !conflicts.profs.includes(p)) {
-                conflicts.profs.push(p);
-            }
+            // Safely get IDs from existing schedule
+            const busyProfs = [s.principal, s.examinator, s.supervisor]
+                .map(p => p?.toString())
+                .filter(p => p && mongoose.Types.ObjectId.isValid(p));
+
+            newProfs.forEach(p => {
+                if (busyProfs.includes(p) && !conflicts.profs.includes(p)) {
+                    conflicts.profs.push(p);
+                }
+            });
         });
-    });
 
-    return conflicts;
+        return conflicts;
+    } catch (error) {
+        console.error("Conflict Check Error:", error);
+        return { room: false, profs: [] }; // Fallback
+    }
 };
 
 const autoPlan = async (req, res) => {
     try {
+        console.log("Starting Auto-Planning...");
+
         // 1. Identify which theses need planning
         const scheduledThesisIds = await Schedule.find().distinct('thesis');
         const thesesToSchedule = await Thesis.find({
@@ -41,54 +56,52 @@ const autoPlan = async (req, res) => {
             status: 'approved'
         });
 
-        // 2. Identify existing tentative schedules with missing jury members
-        const partialSchedules = await Schedule.find({
-            $or: [
-                { principal: { $exists: false } }, { principal: null },
-                { examinator: { $exists: false } }, { examinator: null },
-                { supervisor: { $exists: false } }, { supervisor: null }
-            ]
-        });
-
+        // 2. Identify professors
         const professors = await User.find({ role: 'professor' });
         if (professors.length < 3) {
             return res.status(400).json({ message: "Not enough professors available (minimum 3 required)." });
         }
 
-        const rooms = ["Room 110/DI", "Room 111/DI"];
-        const results = [];
-        const updatedSchedules = [];
+        // 3. Identify and fix partial schedules (missing jury members)
+        const allSchedules = await Schedule.find();
+        let fixedCount = 0;
 
-        // --- Task A: Fix Partial/Broken Schedules ---
-        for (const s of partialSchedules) {
-            const busyInSlot = await Schedule.find({ startTime: s.startTime, _id: { $ne: s._id } });
-            const busyProfIds = new Set(busyInSlot.flatMap(bs => [
-                bs.principal?.toString(),
-                bs.examinator?.toString(),
-                bs.supervisor?.toString()
-            ]).filter(Boolean));
+        for (const s of allSchedules) {
+            if (!s.principal || !s.examinator || !s.supervisor) {
+                const busyInSlot = await Schedule.find({ startTime: s.startTime, _id: { $ne: s._id } });
+                const busyProfIds = new Set(busyInSlot.flatMap(bs => [
+                    bs.principal?.toString(),
+                    bs.examinator?.toString(),
+                    bs.supervisor?.toString()
+                ]).filter(Boolean));
 
-            // Must exclude everyone already in the jury or busy in slot
-            const excludeIds = new Set(busyProfIds);
-            if (s.supervisor) excludeIds.add(s.supervisor.toString());
-            if (s.principal) excludeIds.add(s.principal.toString());
-            if (s.examinator) excludeIds.add(s.examinator.toString());
+                const excludeIds = new Set(busyProfIds);
+                if (s.supervisor) excludeIds.add(s.supervisor.toString());
+                if (s.principal) excludeIds.add(s.principal.toString());
+                if (s.examinator) excludeIds.add(s.examinator.toString());
 
-            const pool = professors.filter(p => !excludeIds.has(p._id.toString()))
-                .sort(() => 0.5 - Math.random());
+                const availablePool = professors.filter(p => !excludeIds.has(p._id.toString()))
+                    .sort(() => 0.5 - Math.random());
 
-            let poolIdx = 0;
-            if (!s.supervisor && poolIdx < pool.length) s.supervisor = pool[poolIdx++]._id;
-            if (!s.principal && poolIdx < pool.length) s.principal = pool[poolIdx++]._id;
-            if (!s.examinator && poolIdx < pool.length) s.examinator = pool[poolIdx++]._id;
+                let poolIdx = 0;
+                let changed = false;
 
-            await s.save();
-            updatedSchedules.push(s);
+                if (!s.supervisor && poolIdx < availablePool.length) { s.supervisor = availablePool[poolIdx++]._id; changed = true; }
+                if (!s.principal && poolIdx < availablePool.length) { s.principal = availablePool[poolIdx++]._id; changed = true; }
+                if (!s.examinator && poolIdx < availablePool.length) { s.examinator = availablePool[poolIdx++]._id; changed = true; }
+
+                if (changed) {
+                    await s.save();
+                    fixedCount++;
+                }
+            }
         }
 
-        // --- Task B: Plan New Theses ---
+        // 4. Plan new theses
+        const rooms = ["Room 110/DI", "Room 111/DI", "Room 112/DI", "Room 113/DI"];
+        let plannedCount = 0;
+
         if (thesesToSchedule.length > 0) {
-            // Start from tomorrow at 07:15
             let currentSlot = new Date();
             currentSlot.setDate(currentSlot.getDate() + 1);
             currentSlot.setHours(7, 15, 0, 0);
@@ -96,8 +109,7 @@ const autoPlan = async (req, res) => {
             for (const thesis of thesesToSchedule) {
                 let found = false;
                 const supervisorId = thesis.supervisor?.toString();
-
-                if (!supervisorId) continue; // Skip if data is corrupted
+                if (!supervisorId) continue;
 
                 while (!found) {
                     for (const room of rooms) {
@@ -111,29 +123,32 @@ const autoPlan = async (req, res) => {
                                 s.supervisor?.toString()
                             ]).filter(Boolean));
 
-                            // Exclude supervisor and anyone busy
                             const excludeIds = new Set(busyProfIds);
                             excludeIds.add(supervisorId);
 
-                            const availableProfs = professors.filter(p => !excludeIds.has(p._id.toString()))
+                            const pool = professors.filter(p => !excludeIds.has(p._id.toString()))
                                 .sort(() => 0.5 - Math.random());
 
-                            if (availableProfs.length >= 2) {
+                            if (pool.length >= 2) {
+                                const startTime = new Date(currentSlot);
+                                const endTime = new Date(currentSlot);
+                                endTime.setMinutes(startTime.getMinutes() + 35);
+
                                 const newSchedule = new Schedule({
                                     thesis: thesis._id,
-                                    principal: availableProfs[0]._id,
-                                    examinator: availableProfs[1]._id,
+                                    principal: pool[0]._id,
+                                    examinator: pool[1]._id,
                                     supervisor: thesis.supervisor,
                                     student: thesis.student,
-                                    startTime: new Date(currentSlot),
-                                    endTime: new Date(new Date(currentSlot).setMinutes(currentSlot.getMinutes() + 35)),
+                                    startTime,
+                                    endTime,
                                     room
                                 });
 
                                 await newSchedule.save();
                                 thesis.status = 'scheduled';
                                 await thesis.save();
-                                results.push(newSchedule);
+                                plannedCount++;
                                 found = true;
                                 break;
                             }
@@ -143,9 +158,12 @@ const autoPlan = async (req, res) => {
                     if (!found) {
                         currentSlot.setMinutes(currentSlot.getMinutes() + 35);
                         const totalMinutes = currentSlot.getHours() * 60 + currentSlot.getMinutes();
+                        // Morning shift ends 11:20
                         if (totalMinutes > 11 * 60 + 20 && totalMinutes < 13 * 60 + 30) {
                             currentSlot.setHours(13, 30, 0, 0);
-                        } else if (totalMinutes > 17 * 60 + 35) {
+                        }
+                        // Evening ends 17:35
+                        else if (totalMinutes > 17 * 60 + 35) {
                             currentSlot.setDate(currentSlot.getDate() + 1);
                             currentSlot.setHours(7, 15, 0, 0);
                         }
@@ -156,15 +174,14 @@ const autoPlan = async (req, res) => {
 
         res.status(201).json({
             message: "Automatic planning completed",
-            scheduled: results.length,
-            fixed: updatedSchedules.length
+            scheduled: plannedCount,
+            fixed: fixedCount
         });
     } catch (error) {
-        console.error("Auto-plan Error:", error.message);
+        console.error("Auto-plan Error:", error);
         res.status(500).json({ message: "Server error during planning" });
     }
 };
-
 
 const getSchedules = async (req, res) => {
     try {
@@ -190,34 +207,26 @@ const updateSchedule = async (req, res) => {
             return res.status(404).json({ message: "Schedule not found" });
         }
 
-        // Check for conflicts if time, room, or jury members changed
         const newStartTime = startTime ? new Date(startTime) : schedule.startTime;
         const newRoom = room || schedule.room;
         const newPrincipal = principal || schedule.principal;
         const newExaminator = examinator || schedule.examinator;
         const newSupervisor = supervisor || schedule.supervisor;
 
-        // Validate that all jury members are unique
-        const juryMembers = [
-            newPrincipal.toString(),
-            newExaminator.toString(),
-            newSupervisor.toString()
-        ];
-        const uniqueMembers = new Set(juryMembers);
-        if (uniqueMembers.size !== juryMembers.length) {
-            return res.status(400).json({ message: "All jury members (Principal, Examinator, Supervisor) must be different people." });
+        // IDs to check
+        const pId = newPrincipal?.toString();
+        const eId = newExaminator?.toString();
+        const sId = newSupervisor?.toString();
+
+        if (pId === eId || pId === sId || eId === sId) {
+            return res.status(400).json({ message: "All jury members must be different people." });
         }
 
         const conflicts = await getConflicts(newStartTime, newRoom, newPrincipal, newExaminator, newSupervisor, req.params.id);
 
-        if (conflicts.room) {
-            return res.status(400).json({ message: `Room ${newRoom} is already occupied at this time.` });
-        }
-        if (conflicts.profs.length > 0) {
-            return res.status(400).json({ message: "One or more professors are already assigned to another jury at this time." });
-        }
+        if (conflicts.room) return res.status(400).json({ message: `Room ${newRoom} is occupied.` });
+        if (conflicts.profs.length > 0) return res.status(400).json({ message: "Professor conflict detected." });
 
-        // Update fields
         if (principal) schedule.principal = principal;
         if (examinator) schedule.examinator = examinator;
         if (supervisor) schedule.supervisor = supervisor;
@@ -226,9 +235,9 @@ const updateSchedule = async (req, res) => {
         if (room) schedule.room = room;
 
         await schedule.save();
-        res.status(200).json({ message: "Schedule updated successfully", schedule });
+        res.status(200).json({ message: "Updated successfully", schedule });
     } catch (error) {
-        console.error("Update Schedule Error:", error);
+        console.error("Update Error:", error);
         res.status(500).json({ message: "Server error" });
     }
 };
@@ -236,15 +245,12 @@ const updateSchedule = async (req, res) => {
 const deleteSchedule = async (req, res) => {
     try {
         const schedule = await Schedule.findById(req.params.id);
-        if (!schedule) return res.status(404).json({ message: "Schedule not found" });
+        if (!schedule) return res.status(404).json({ message: "Not found" });
 
-        // Change thesis status back to approved
         await Thesis.findByIdAndUpdate(schedule.thesis, { status: 'approved' });
-
         await Schedule.findByIdAndDelete(req.params.id);
-        res.status(200).json({ message: "Schedule deleted successfully" });
+        res.status(200).json({ message: "Deleted" });
     } catch (error) {
-        console.error("Delete Schedule Error:", error);
         res.status(500).json({ message: "Server error" });
     }
 };
@@ -252,72 +258,39 @@ const deleteSchedule = async (req, res) => {
 const exportSchedules = async (req, res) => {
     try {
         const schedules = await Schedule.find()
-            .populate('thesis')
-            .populate('principal', 'name')
-            .populate('examinator', 'name')
-            .populate('supervisor', 'name')
-            .populate('student', 'name email');
+            .populate('thesis principal examinator supervisor student', 'name email title startTime');
 
-        if (schedules.length === 0) {
-            return res.status(404).json({ message: "No schedules found to export." });
-        }
+        if (schedules.length === 0) return res.status(404).json({ message: "No data" });
 
-        // Header matching juries.xlsx
-        const rows = [
-            ["STT", "MSSV", "Họ tên SV", "Tên đề tài (Tiếng Việt và Tiếng Anh)", "Cán bộ hướng dẫn", "Giờ", "Thành viên Hội đồng"]
-        ];
-
-        schedules.forEach((s, index) => {
+        const rows = [["STT", "MSSV", "Họ tên SV", "Tên đề tài", "GVHD", "Giờ", "Hội đồng"]];
+        schedules.forEach((s, i) => {
             const studentId = s.student?.email?.split('@')[0].toUpperCase() || "";
-            const juryStr = `1. ${s.principal?.name}\n2. ${s.examinator?.name}\n3. ${s.supervisor?.name}`;
-            const timeStr = new Date(s.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
-
-            rows.push([
-                index + 1,
-                studentId,
-                s.student?.name || "",
-                s.thesis?.title || "",
-                s.supervisor?.name || "",
-                timeStr,
-                juryStr
-            ]);
+            const jury = `1. ${s.principal?.name}\n2. ${s.examinator?.name}\n3. ${s.supervisor?.name}`;
+            const time = new Date(s.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+            rows.push([i + 1, studentId, s.student?.name || "", s.thesis?.title || "", s.supervisor?.name || "", time, jury]);
         });
 
         const wb = xlsx.utils.book_new();
         const ws = xlsx.utils.aoa_to_sheet(rows);
-
-        // Adjust column widths for readability
-        ws['!cols'] = [
-            { wch: 5 },  // STT
-            { wch: 10 }, // MSSV
-            { wch: 25 }, // Họ tên SV
-            { wch: 60 }, // Tên đề tài
-            { wch: 25 }, // Cán bộ hướng dẫn
-            { wch: 10 }, // Giờ
-            { wch: 40 }, // Thành viên Hội đồng
-        ];
-
-        xlsx.utils.book_append_sheet(wb, ws, "Jury Schedule");
+        ws['!cols'] = [{ wch: 5 }, { wch: 10 }, { wch: 20 }, { wch: 50 }, { wch: 20 }, { wch: 10 }, { wch: 40 }];
+        xlsx.utils.book_append_sheet(wb, ws, "Jury");
         const buf = xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' });
 
-        res.setHeader('Content-Disposition', 'attachment; filename="jury_schedule_export.xlsx"');
+        res.setHeader('Content-Disposition', 'attachment; filename="schedule.xlsx"');
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         res.send(buf);
-
     } catch (error) {
-        console.error("Export Error:", error);
-        res.status(500).json({ message: "Server error during export" });
+        res.status(500).json({ message: "Export error" });
     }
 };
 
 const deleteAllSchedules = async (req, res) => {
     try {
-        const result = await Schedule.deleteMany({});
-        // Also update all theses status back to approved
+        await Schedule.deleteMany({});
         await Thesis.updateMany({}, { status: 'approved' });
-        res.status(200).json({ message: `Successfully deleted ${result.deletedCount} schedules` });
+        res.status(200).json({ message: "Cleared all planned schedules" });
     } catch (error) {
-        console.error("Delete All Schedules Error:", error);
+        console.error("Delete All Error:", error);
         res.status(500).json({ message: "Server error" });
     }
 };
