@@ -243,31 +243,34 @@ const Planning = () => {
     const availableRooms = ["Room 110/DI", "Room 111/DI", "Room 112/DI", "Room 113/DI"];
 
     // Statistical Summary Logic
-    const generateSummary = () => {
-        const stats = {};
+    const getProfessorStats = () => {
+        const statsMap = {};
         professors.forEach(p => {
-            stats[p._id] = { name: p.name, supervisor: 0, principal: 0, examinator: 0, total: 0 };
+            statsMap[p._id] = { name: p.name, supervisor: 0, principal: 0, examinator: 0, total: 0 };
         });
 
         schedules.forEach(s => {
-            if (s.supervisor?._id && stats[s.supervisor._id]) {
-                stats[s.supervisor._id].supervisor++;
-                stats[s.supervisor._id].total++;
+            if (s.supervisor?._id && statsMap[s.supervisor._id]) {
+                statsMap[s.supervisor._id].supervisor++;
+                statsMap[s.supervisor._id].total++;
             }
-            if (s.principal?._id && stats[s.principal._id]) {
-                stats[s.principal._id].principal++;
-                stats[s.principal._id].total++;
+            if (s.principal?._id && statsMap[s.principal._id]) {
+                statsMap[s.principal._id].principal++;
+                statsMap[s.principal._id].total++;
             }
-            if (s.examinator?._id && stats[s.examinator._id]) {
-                stats[s.examinator._id].examinator++;
-                stats[s.examinator._id].total++;
+            if (s.examinator?._id && statsMap[s.examinator._id]) {
+                statsMap[s.examinator._id].examinator++;
+                statsMap[s.examinator._id].total++;
             }
         });
 
-        return Object.values(stats).sort((a, b) => b.total - a.total);
+        return {
+            map: statsMap,
+            list: Object.values(statsMap).sort((a, b) => b.total - a.total)
+        };
     };
 
-    const professorStats = generateSummary();
+    const professorStats = getProfessorStats();
 
     return (
         <Container fluid className="py-4" style={{ marginTop: '70px', backgroundColor: '#f8f9fa', minHeight: '100vh' }}>
@@ -433,6 +436,38 @@ const Planning = () => {
 
                 {viewMode === 'summary' && (
                     <div className="d-flex flex-column gap-4">
+                        {/* Professor Participation Recap */}
+                        <div className="mb-4">
+                            <h5 className="fw-bold mb-3 d-flex align-items-center">
+                                <span className="badge bg-dark me-2">📊</span>
+                                Professor Participation Summary
+                            </h5>
+                            <Card className="border-0 shadow-sm overflow-hidden">
+                                <Table bordered hover size="sm" className="mb-0 text-center">
+                                    <thead className="table-dark small">
+                                        <tr>
+                                            <th className="text-start ps-3">Professor Name</th>
+                                            <th>Chủ tịch (PR)</th>
+                                            <th>GVHD (SV)</th>
+                                            <th>Phản biện (EX)</th>
+                                            <th className="bg-primary">Total Participation</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="small">
+                                        {professorStats.list.filter(p => p.total > 0).map(p => (
+                                            <tr key={p.name}>
+                                                <td className="text-start ps-3 fw-bold align-middle">{p.name}</td>
+                                                <td className="align-middle"><Badge bg="light" text="dark" pill className="border">{p.principal}</Badge></td>
+                                                <td className="align-middle"><Badge bg="light" text="dark" pill className="border">{p.supervisor}</Badge></td>
+                                                <td className="align-middle"><Badge bg="light" text="dark" pill className="border">{p.examinator}</Badge></td>
+                                                <td className="align-middle text-primary fw-bold" style={{ fontSize: '1rem' }}>{p.total}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </Table>
+                            </Card>
+                        </div>
+
                         {[...new Set(schedules.map(s => new Date(s.startTime).toLocaleDateString()))].sort((a, b) => new Date(a) - new Date(b)).map(date => {
                             const daySchedules = schedules.filter(s => new Date(s.startTime).toLocaleDateString() === date);
                             const rooms = [...new Set(daySchedules.map(s => s.room))].sort();
@@ -465,7 +500,11 @@ const Planning = () => {
                                                         } else {
                                                             committees.push({
                                                                 key: juryKey,
-                                                                names: [s.principal?.name, s.supervisor?.name, s.examinator?.name],
+                                                                members: [
+                                                                    { id: s.principal?._id, name: s.principal?.name, roleColor: 'text-primary' },
+                                                                    { id: s.supervisor?._id, name: s.supervisor?.name, roleColor: 'text-success' },
+                                                                    { id: s.examinator?._id, name: s.examinator?.name, roleColor: 'text-secondary' }
+                                                                ],
                                                                 count: 1
                                                             });
                                                         }
@@ -478,12 +517,15 @@ const Planning = () => {
                                                             )}
                                                             <td className="py-2 text-start ps-3 align-middle">
                                                                 <div className="d-flex align-items-center gap-2">
-                                                                    <Badge bg="white" text="dark" className="border shadow-sm py-2">
-                                                                        <span className="text-primary fw-bold">1. {c.names[0] || "—"}</span>
-                                                                        <span className="mx-2 text-muted">|</span>
-                                                                        <span className="fw-bold text-success">2. {c.names[1] || "—"}</span>
-                                                                        <span className="mx-2 text-muted">|</span>
-                                                                        <span className="text-secondary fw-bold">3. {c.names[2] || "—"}</span>
+                                                                    <Badge bg="white" text="dark" className="border shadow-sm py-2 px-3">
+                                                                        {c.members.map((m, mIdx) => (
+                                                                            <React.Fragment key={m.id || mIdx}>
+                                                                                <span className={`${m.roleColor} fw-bold`}>
+                                                                                    ({c.count}) {m.name || "—"}
+                                                                                </span>
+                                                                                {mIdx < 2 && <span className="mx-2 text-muted">|</span>}
+                                                                            </React.Fragment>
+                                                                        ))}
                                                                     </Badge>
                                                                 </div>
                                                             </td>
