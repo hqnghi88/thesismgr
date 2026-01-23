@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
-import "./Dashboard.css";
+import { Container, Row, Col, Card, Button, Badge, ListGroup } from "react-bootstrap";
 
 const Dashboard = () => {
     const [stats, setStats] = useState({
@@ -24,39 +24,33 @@ const Dashboard = () => {
 
     const fetchDashboardData = async () => {
         try {
-            // Fetch theses
             const thesesRes = await axios.get(`${import.meta.env.VITE_API_URL}/api/theses`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             const theses = thesesRes.data;
 
-            // Fetch schedules
             const schedulesRes = await axios.get(`${import.meta.env.VITE_API_URL}/api/schedules`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             const schedules = schedulesRes.data;
 
-            // Calculate stats
             setStats({
                 totalTheses: theses.length,
                 pendingTheses: theses.filter(t => t.status === 'pending').length,
                 approvedTheses: theses.filter(t => t.status === 'approved').length,
                 scheduledTheses: theses.filter(t => t.status === 'scheduled').length,
                 totalSchedules: schedules.length,
-                totalUsers: 0 // Will be populated if admin
+                totalUsers: 0
             });
 
-            // Recent theses (last 5)
             setRecentTheses(theses.slice(-5).reverse());
 
-            // Upcoming schedules (next 5)
             const upcoming = schedules
                 .filter(s => new Date(s.startTime) > new Date())
                 .sort((a, b) => new Date(a.startTime) - new Date(b.startTime))
                 .slice(0, 5);
             setUpcomingSchedules(upcoming);
 
-            // Fetch user count if admin
             if (user.role === 'admin') {
                 const usersRes = await axios.get(`${import.meta.env.VITE_API_URL}/api/users`, {
                     headers: { Authorization: `Bearer ${token}` }
@@ -68,144 +62,177 @@ const Dashboard = () => {
         }
     };
 
+    const getStatusVariant = (status) => {
+        switch (status) {
+            case 'pending': return 'warning';
+            case 'approved': return 'success';
+            case 'scheduled': return 'info';
+            default: return 'secondary';
+        }
+    };
+
     return (
-        <div className="dashboard-container">
-            <h2 className="dashboard-heading">📊 Dashboard</h2>
-            <p style={{ color: '#6b7280', marginBottom: '30px' }}>
-                Welcome back, <strong>{user.name}</strong>! Here's an overview of your thesis management system.
-            </p>
+        <Container fluid className="py-4" style={{ marginTop: '70px', backgroundColor: '#f8f9fa', minHeight: '100vh' }}>
+            <Container>
+                <h2 className="mb-1 fw-bold">📊 Dashboard</h2>
+                <p className="text-muted mb-4">Welcome back, <strong>{user.name}</strong>! Here's an overview of your thesis management system.</p>
 
-            {/* Statistics Cards */}
-            <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                gap: '20px',
-                marginBottom: '30px'
-            }}>
-                <div className="stat-card" style={{ backgroundColor: '#eff6ff', borderLeft: '4px solid #3b82f6' }}>
-                    <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#3b82f6' }}>{stats.totalTheses}</div>
-                    <div style={{ color: '#6b7280', marginTop: '5px' }}>Total Theses</div>
-                </div>
-                <div className="stat-card" style={{ backgroundColor: '#fef3c7', borderLeft: '4px solid #f59e0b' }}>
-                    <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#f59e0b' }}>{stats.pendingTheses}</div>
-                    <div style={{ color: '#6b7280', marginTop: '5px' }}>Pending Review</div>
-                </div>
-                <div className="stat-card" style={{ backgroundColor: '#d1fae5', borderLeft: '4px solid #10b981' }}>
-                    <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#10b981' }}>{stats.approvedTheses}</div>
-                    <div style={{ color: '#6b7280', marginTop: '5px' }}>Approved</div>
-                </div>
-                <div className="stat-card" style={{ backgroundColor: '#e0e7ff', borderLeft: '4px solid #6366f1' }}>
-                    <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#6366f1' }}>{stats.scheduledTheses}</div>
-                    <div style={{ color: '#6b7280', marginTop: '5px' }}>Scheduled</div>
-                </div>
-                {user.role === 'admin' && (
-                    <div className="stat-card" style={{ backgroundColor: '#fce7f3', borderLeft: '4px solid #ec4899' }}>
-                        <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#ec4899' }}>{stats.totalUsers}</div>
-                        <div style={{ color: '#6b7280', marginTop: '5px' }}>Total Users</div>
-                    </div>
-                )}
-            </div>
-
-            {/* Quick Actions */}
-            <div style={{ marginBottom: '30px' }}>
-                <h3 style={{ marginBottom: '15px' }}>Quick Actions</h3>
-                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                    <button
-                        onClick={() => navigate('/theses')}
-                        style={{
-                            padding: '10px 20px',
-                            backgroundColor: '#4f46e5',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '8px',
-                            cursor: 'pointer'
-                        }}
-                    >
-                        📝 Manage Theses
-                    </button>
-                    <button
-                        onClick={() => navigate('/planning')}
-                        style={{
-                            padding: '10px 20px',
-                            backgroundColor: '#10b981',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '8px',
-                            cursor: 'pointer'
-                        }}
-                    >
-                        📅 View Planning
-                    </button>
+                {/* Statistics Cards */}
+                <Row className="g-4 mb-4">
+                    <Col md={6} lg={3}>
+                        <Card className="border-0 shadow-sm h-100">
+                            <Card.Body>
+                                <div className="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <h6 className="text-muted mb-2">Total Theses</h6>
+                                        <h2 className="mb-0 fw-bold text-primary">{stats.totalTheses}</h2>
+                                    </div>
+                                    <div className="fs-1 text-primary opacity-25">📚</div>
+                                </div>
+                            </Card.Body>
+                        </Card>
+                    </Col>
+                    <Col md={6} lg={3}>
+                        <Card className="border-0 shadow-sm h-100">
+                            <Card.Body>
+                                <div className="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <h6 className="text-muted mb-2">Pending Review</h6>
+                                        <h2 className="mb-0 fw-bold text-warning">{stats.pendingTheses}</h2>
+                                    </div>
+                                    <div className="fs-1 text-warning opacity-25">⏳</div>
+                                </div>
+                            </Card.Body>
+                        </Card>
+                    </Col>
+                    <Col md={6} lg={3}>
+                        <Card className="border-0 shadow-sm h-100">
+                            <Card.Body>
+                                <div className="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <h6 className="text-muted mb-2">Approved</h6>
+                                        <h2 className="mb-0 fw-bold text-success">{stats.approvedTheses}</h2>
+                                    </div>
+                                    <div className="fs-1 text-success opacity-25">✅</div>
+                                </div>
+                            </Card.Body>
+                        </Card>
+                    </Col>
+                    <Col md={6} lg={3}>
+                        <Card className="border-0 shadow-sm h-100">
+                            <Card.Body>
+                                <div className="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <h6 className="text-muted mb-2">Scheduled</h6>
+                                        <h2 className="mb-0 fw-bold text-info">{stats.scheduledTheses}</h2>
+                                    </div>
+                                    <div className="fs-1 text-info opacity-25">📅</div>
+                                </div>
+                            </Card.Body>
+                        </Card>
+                    </Col>
                     {user.role === 'admin' && (
-                        <>
-                            <button
-                                onClick={() => navigate('/admin/users')}
-                                style={{
-                                    padding: '10px 20px',
-                                    backgroundColor: '#ec4899',
-                                    color: 'white',
-                                    border: 'none',
-                                    borderRadius: '8px',
-                                    cursor: 'pointer'
-                                }}
-                            >
-                                👥 Manage Users
-                            </button>
-                            <button
-                                onClick={() => navigate('/admin/theses')}
-                                style={{
-                                    padding: '10px 20px',
-                                    backgroundColor: '#f59e0b',
-                                    color: 'white',
-                                    border: 'none',
-                                    borderRadius: '8px',
-                                    cursor: 'pointer'
-                                }}
-                            >
-                                🎓 All Theses
-                            </button>
-                        </>
+                        <Col md={6} lg={3}>
+                            <Card className="border-0 shadow-sm h-100">
+                                <Card.Body>
+                                    <div className="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <h6 className="text-muted mb-2">Total Users</h6>
+                                            <h2 className="mb-0 fw-bold text-danger">{stats.totalUsers}</h2>
+                                        </div>
+                                        <div className="fs-1 text-danger opacity-25">👥</div>
+                                    </div>
+                                </Card.Body>
+                            </Card>
+                        </Col>
                     )}
-                </div>
-            </div>
+                </Row>
 
-            {/* Recent Activity */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '20px' }}>
-                {/* Recent Theses */}
-                <div>
-                    <h3 style={{ marginBottom: '15px' }}>Recent Theses</h3>
-                    <div className="tasks-container">
-                        {recentTheses.length > 0 ? recentTheses.map(thesis => (
-                            <div key={thesis._id} className="task-card" style={{ marginBottom: '10px' }}>
-                                <div className="task-title" style={{ fontSize: '14px' }}>🎓 {thesis.title}</div>
-                                <div className={`task-status ${thesis.status}`} style={{ fontSize: '12px' }}>
-                                    {thesis.status.replace('_', ' ')}
-                                </div>
-                                <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '5px' }}>
-                                    Student: {thesis.student?.name}
-                                </div>
-                            </div>
-                        )) : <p style={{ color: '#6b7280' }}>No theses yet</p>}
-                    </div>
-                </div>
+                {/* Quick Actions */}
+                <Card className="border-0 shadow-sm mb-4">
+                    <Card.Body>
+                        <h5 className="mb-3 fw-bold">Quick Actions</h5>
+                        <div className="d-flex flex-wrap gap-2">
+                            <Button variant="primary" onClick={() => navigate('/theses')}>
+                                📝 Manage Theses
+                            </Button>
+                            <Button variant="success" onClick={() => navigate('/planning')}>
+                                📅 View Planning
+                            </Button>
+                            {user.role === 'admin' && (
+                                <>
+                                    <Button variant="danger" onClick={() => navigate('/admin/users')}>
+                                        👥 Manage Users
+                                    </Button>
+                                    <Button variant="warning" onClick={() => navigate('/admin/theses')}>
+                                        🎓 All Theses
+                                    </Button>
+                                </>
+                            )}
+                        </div>
+                    </Card.Body>
+                </Card>
 
-                {/* Upcoming Schedules */}
-                <div>
-                    <h3 style={{ marginBottom: '15px' }}>Upcoming Defenses</h3>
-                    <div className="tasks-container">
-                        {upcomingSchedules.length > 0 ? upcomingSchedules.map(schedule => (
-                            <div key={schedule._id} className="task-card" style={{ marginBottom: '10px', borderLeftColor: '#10b981' }}>
-                                <div className="task-title" style={{ fontSize: '14px' }}>📅 {schedule.thesis?.title}</div>
-                                <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '5px' }}>
-                                    <strong>Time:</strong> {new Date(schedule.startTime).toLocaleString()}<br />
-                                    <strong>Room:</strong> {schedule.room}
-                                </div>
-                            </div>
-                        )) : <p style={{ color: '#6b7280' }}>No upcoming defenses</p>}
-                    </div>
-                </div>
-            </div>
-        </div>
+                {/* Recent Activity */}
+                <Row className="g-4">
+                    <Col lg={6}>
+                        <Card className="border-0 shadow-sm h-100">
+                            <Card.Header className="bg-white border-bottom">
+                                <h5 className="mb-0 fw-bold">Recent Theses</h5>
+                            </Card.Header>
+                            <Card.Body className="p-0">
+                                <ListGroup variant="flush">
+                                    {recentTheses.length > 0 ? recentTheses.map(thesis => (
+                                        <ListGroup.Item key={thesis._id}>
+                                            <div className="d-flex justify-content-between align-items-start">
+                                                <div className="flex-grow-1">
+                                                    <h6 className="mb-1">🎓 {thesis.title}</h6>
+                                                    <small className="text-muted">Student: {thesis.student?.name}</small>
+                                                </div>
+                                                <Badge bg={getStatusVariant(thesis.status)}>
+                                                    {thesis.status}
+                                                </Badge>
+                                            </div>
+                                        </ListGroup.Item>
+                                    )) : (
+                                        <ListGroup.Item className="text-muted text-center py-4">
+                                            No theses yet
+                                        </ListGroup.Item>
+                                    )}
+                                </ListGroup>
+                            </Card.Body>
+                        </Card>
+                    </Col>
+
+                    <Col lg={6}>
+                        <Card className="border-0 shadow-sm h-100">
+                            <Card.Header className="bg-white border-bottom">
+                                <h5 className="mb-0 fw-bold">Upcoming Defenses</h5>
+                            </Card.Header>
+                            <Card.Body className="p-0">
+                                <ListGroup variant="flush">
+                                    {upcomingSchedules.length > 0 ? upcomingSchedules.map(schedule => (
+                                        <ListGroup.Item key={schedule._id}>
+                                            <h6 className="mb-1">📅 {schedule.thesis?.title}</h6>
+                                            <small className="text-muted d-block">
+                                                <strong>Time:</strong> {new Date(schedule.startTime).toLocaleString()}
+                                            </small>
+                                            <small className="text-muted">
+                                                <strong>Room:</strong> {schedule.room}
+                                            </small>
+                                        </ListGroup.Item>
+                                    )) : (
+                                        <ListGroup.Item className="text-muted text-center py-4">
+                                            No upcoming defenses
+                                        </ListGroup.Item>
+                                    )}
+                                </ListGroup>
+                            </Card.Body>
+                        </Card>
+                    </Col>
+                </Row>
+            </Container>
+        </Container>
     );
 };
 

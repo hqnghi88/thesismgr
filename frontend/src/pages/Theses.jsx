@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
-import "./Dashboard.css";
+import { Container, Row, Col, Card, Form, Button, Badge, Alert } from "react-bootstrap";
 
 const Theses = () => {
     const [theses, setTheses] = useState([]);
@@ -40,13 +40,11 @@ const Theses = () => {
         e.preventDefault();
         try {
             if (editingId) {
-                // Update existing thesis
                 await axios.put(`${import.meta.env.VITE_API_URL}/api/theses/${editingId}`, form, {
                     headers: { Authorization: `Bearer ${token}` },
                 });
                 setEditingId(null);
             } else {
-                // Create new thesis
                 await axios.post(`${import.meta.env.VITE_API_URL}/api/theses`, form, {
                     headers: { Authorization: `Bearer ${token}` },
                 });
@@ -85,102 +83,119 @@ const Theses = () => {
         }
     };
 
+    const getStatusVariant = (status) => {
+        switch (status) {
+            case 'pending': return 'warning';
+            case 'approved': return 'success';
+            case 'scheduled': return 'info';
+            default: return 'secondary';
+        }
+    };
 
     return (
-        <div className="dashboard-container">
-            <h2 className="dashboard-heading">{editingId ? "Edit Thesis" : "Thesis Management"}</h2>
+        <Container fluid className="py-4" style={{ marginTop: '70px', backgroundColor: '#f8f9fa', minHeight: '100vh' }}>
+            <Container>
+                <h2 className="mb-4 fw-bold">{editingId ? "✏️ Edit Thesis" : "📝 Thesis Management"}</h2>
 
-            <form className="task-form" onSubmit={handleSubmit}>
-                <div className="task-form-container">
-                    <input
-                        type="text"
-                        className="task-input"
-                        placeholder="Thesis Title"
-                        value={form.title}
-                        onChange={(e) => setForm({ ...form, title: e.target.value })}
-                        required
-                    />
-                    <textarea
-                        className="task-textarea"
-                        placeholder="Abstract"
-                        value={form.abstract}
-                        onChange={(e) => setForm({ ...form, abstract: e.target.value })}
-                    />
-                    <select
-                        className="task-input"
-                        value={form.supervisor}
-                        onChange={(e) => setForm({ ...form, supervisor: e.target.value })}
-                        required
-                        style={{ padding: '10px', marginBottom: '10px', borderRadius: '6px' }}
-                    >
-                        <option value="">Select Supervisor</option>
-                        {professors.map(prof => (
-                            <option key={prof._id} value={prof._id}>{prof.name}</option>
-                        ))}
-                    </select>
-                    <div style={{ display: 'flex', gap: '10px' }}>
-                        <button style={{ backgroundColor: "#4f46e5", flex: 1 }} type="submit">
-                            {editingId ? "Update Thesis" : "Submit Thesis"}
-                        </button>
-                        {editingId && (
-                            <button
-                                type="button"
-                                onClick={handleCancelEdit}
-                                style={{ backgroundColor: "#6b7280", flex: 1 }}
-                            >
-                                Cancel
-                            </button>
-                        )}
-                    </div>
-                </div>
-            </form>
+                {/* Form Card */}
+                <Card className="border-0 shadow-sm mb-4">
+                    <Card.Body>
+                        <Form onSubmit={handleSubmit}>
+                            <Row>
+                                <Col md={12} className="mb-3">
+                                    <Form.Group>
+                                        <Form.Label className="fw-semibold">Thesis Title</Form.Label>
+                                        <Form.Control
+                                            type="text"
+                                            placeholder="Enter thesis title"
+                                            value={form.title}
+                                            onChange={(e) => setForm({ ...form, title: e.target.value })}
+                                            required
+                                        />
+                                    </Form.Group>
+                                </Col>
+                                <Col md={12} className="mb-3">
+                                    <Form.Group>
+                                        <Form.Label className="fw-semibold">Abstract</Form.Label>
+                                        <Form.Control
+                                            as="textarea"
+                                            rows={3}
+                                            placeholder="Enter abstract"
+                                            value={form.abstract}
+                                            onChange={(e) => setForm({ ...form, abstract: e.target.value })}
+                                        />
+                                    </Form.Group>
+                                </Col>
+                                <Col md={12} className="mb-3">
+                                    <Form.Group>
+                                        <Form.Label className="fw-semibold">Supervisor</Form.Label>
+                                        <Form.Select
+                                            value={form.supervisor}
+                                            onChange={(e) => setForm({ ...form, supervisor: e.target.value })}
+                                            required
+                                        >
+                                            <option value="">Select Supervisor</option>
+                                            {professors.map(prof => (
+                                                <option key={prof._id} value={prof._id}>{prof.name}</option>
+                                            ))}
+                                        </Form.Select>
+                                    </Form.Group>
+                                </Col>
+                                <Col md={12}>
+                                    <div className="d-flex gap-2">
+                                        <Button variant="primary" type="submit">
+                                            {editingId ? "Update Thesis" : "Submit Thesis"}
+                                        </Button>
+                                        {editingId && (
+                                            <Button variant="secondary" type="button" onClick={handleCancelEdit}>
+                                                Cancel
+                                            </Button>
+                                        )}
+                                    </div>
+                                </Col>
+                            </Row>
+                        </Form>
+                    </Card.Body>
+                </Card>
 
+                {/* Theses List */}
+                <Row className="g-4">
+                    {theses.map((thesis) => (
+                        <Col key={thesis._id} lg={6} xl={4}>
+                            <Card className="border-0 shadow-sm h-100">
+                                <Card.Body>
+                                    <div className="d-flex justify-content-between align-items-start mb-2">
+                                        <h5 className="mb-0 fw-bold">🎓 {thesis.title}</h5>
+                                        <Badge bg={getStatusVariant(thesis.status)}>
+                                            {thesis.status.replace('_', ' ')}
+                                        </Badge>
+                                    </div>
+                                    <p className="text-muted small mb-3">{thesis.abstract}</p>
+                                    <div className="small text-muted mb-3">
+                                        <div><strong>Student:</strong> {thesis.student?.name}</div>
+                                        <div><strong>Supervisor:</strong> {thesis.supervisor?.name}</div>
+                                    </div>
+                                    <div className="d-flex gap-2">
+                                        <Button variant="outline-primary" size="sm" onClick={() => handleEdit(thesis)}>
+                                            ✏️ Edit
+                                        </Button>
+                                        <Button variant="outline-danger" size="sm" onClick={() => handleDelete(thesis._id)}>
+                                            🗑️ Delete
+                                        </Button>
+                                    </div>
+                                </Card.Body>
+                            </Card>
+                        </Col>
+                    ))}
+                </Row>
 
-            <div className="tasks-container">
-                {theses.map((thesis) => (
-                    <div key={thesis._id} className="task-card">
-                        <div className="task-title">🎓 {thesis.title}</div>
-                        <div className={`task-status ${thesis.status}`}>
-                            {thesis.status.replace('_', ' ')}
-                        </div>
-                        <p className="task-desc">{thesis.abstract}</p>
-                        <div className="task-meta">
-                            Student: {thesis.student?.name}<br />
-                            Supervisor: {thesis.supervisor?.name}
-                        </div>
-                        <div style={{ marginTop: '10px', textAlign: 'right', display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-                            <button
-                                onClick={() => handleEdit(thesis)}
-                                style={{
-                                    background: '#3b82f6',
-                                    color: 'white',
-                                    border: 'none',
-                                    padding: '5px 10px',
-                                    borderRadius: '4px',
-                                    cursor: 'pointer'
-                                }}
-                            >
-                                ✏️ Edit
-                            </button>
-                            <button
-                                onClick={() => handleDelete(thesis._id)}
-                                style={{
-                                    background: '#ef4444',
-                                    color: 'white',
-                                    border: 'none',
-                                    padding: '5px 10px',
-                                    borderRadius: '4px',
-                                    cursor: 'pointer'
-                                }}
-                            >
-                                🗑️ Delete
-                            </button>
-                        </div>
-                    </div>
-                ))}
-            </div>
-
-        </div>
+                {theses.length === 0 && (
+                    <Alert variant="info" className="text-center">
+                        No theses found. Create your first thesis above!
+                    </Alert>
+                )}
+            </Container>
+        </Container>
     );
 };
 

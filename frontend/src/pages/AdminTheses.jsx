@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
-import "./Dashboard.css";
+import { Container, Row, Col, Card, Button, Form, Badge, Alert } from "react-bootstrap";
 
 const AdminTheses = () => {
     const [theses, setTheses] = useState([]);
@@ -45,7 +45,6 @@ const AdminTheses = () => {
         }
     };
 
-
     const handleUpdate = async (thesisId, updates) => {
         try {
             await axios.put(`${import.meta.env.VITE_API_URL}/api/admin/theses/${thesisId}`,
@@ -70,105 +69,129 @@ const AdminTheses = () => {
         }
     };
 
+    const getStatusVariant = (status) => {
+        switch (status) {
+            case 'submitted': return 'secondary';
+            case 'under_review': return 'warning';
+            case 'approved': return 'success';
+            case 'scheduled': return 'info';
+            case 'completed': return 'primary';
+            default: return 'secondary';
+        }
+    };
 
     useEffect(() => {
         fetchData();
     }, []);
 
     return (
-        <div className="dashboard-container">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                <h2 className="dashboard-heading" style={{ margin: 0 }}>All Theses (Admin Console)</h2>
-                <div>
-                    <input
-                        type="file"
-                        accept=".xlsx, .xls"
-                        style={{ display: 'none' }}
-                        id="excel-upload"
-                        onChange={handleImport}
-                        disabled={importing}
-                    />
-                    <label
-                        htmlFor="excel-upload"
-                        style={{
-                            background: '#10b981',
-                            color: 'white',
-                            padding: '10px 20px',
-                            borderRadius: '8px',
-                            cursor: importing ? 'not-allowed' : 'pointer',
-                            opacity: importing ? 0.7 : 1
-                        }}
-                    >
-                        {importing ? "Importing..." : "📥 Import from Excel"}
-                    </label>
-                </div>
-            </div>
-
-
-            <div className="tasks-container">
-                {theses.map((thesis) => (
-                    <div key={thesis._id} className="task-card">
-                        <div className="task-title" style={{ justifyContent: 'space-between' }}>
-                            <span>🎓 {thesis.title}</span>
-                            <span className={`task-status ${thesis.status}`} style={{ margin: 0 }}>
-                                {thesis.status.replace('_', ' ')}
-                            </span>
-                        </div>
-
-                        <p className="task-desc">{thesis.abstract}</p>
-
-                        <div className="task-meta">
-                            <strong>Student:</strong> {thesis.student?.name} ({thesis.student?.email})<br />
-                            <strong>Current Supervisor:</strong> {thesis.supervisor?.name || "Not assigned"}
-                        </div>
-
-                        <div style={{ marginTop: '15px', display: 'flex', gap: '10px', alignItems: 'center' }}>
-                            <label>Update Status:</label>
-                            <select
-                                value={thesis.status}
-                                onChange={(e) => handleUpdate(thesis._id, { status: e.target.value })}
-                                style={{ padding: '6px', borderRadius: '4px' }}
+        <Container fluid className="py-4" style={{ marginTop: '70px', backgroundColor: '#f8f9fa', minHeight: '100vh' }}>
+            <Container>
+                <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4 gap-3">
+                    <h2 className="mb-0 fw-bold">🎓 All Theses (Admin Console)</h2>
+                    <div>
+                        <input
+                            type="file"
+                            accept=".xlsx, .xls"
+                            style={{ display: 'none' }}
+                            id="excel-upload"
+                            onChange={handleImport}
+                            disabled={importing}
+                        />
+                        <label htmlFor="excel-upload" className="mb-0">
+                            <Button
+                                as="span"
+                                variant="success"
+                                disabled={importing}
+                                style={{ cursor: importing ? 'not-allowed' : 'pointer' }}
                             >
-                                <option value="submitted">Submitted</option>
-                                <option value="under_review">Under Review</option>
-                                <option value="approved">Approved</option>
-                                <option value="scheduled">Scheduled</option>
-                                <option value="completed">Completed</option>
-                            </select>
-
-                            <label style={{ marginLeft: '10px' }}>Reassign Supervisor:</label>
-                            <select
-                                value={thesis.supervisor?._id || ""}
-                                onChange={(e) => handleUpdate(thesis._id, { supervisor: e.target.value })}
-                                style={{ padding: '6px', borderRadius: '4px' }}
-                            >
-                                <option value="">Select Professor</option>
-                                {professors.map(p => (
-                                    <option key={p._id} value={p._id}>{p.name}</option>
-                                ))}
-                            </select>
-
-                            <button
-                                onClick={() => handleDelete(thesis._id)}
-                                style={{
-                                    marginLeft: 'auto',
-                                    background: '#ef4444',
-                                    color: 'white',
-                                    border: 'none',
-                                    padding: '8px 15px',
-                                    borderRadius: '6px',
-                                    cursor: 'pointer'
-                                }}
-                            >
-                                🗑️ Delete
-                            </button>
-                        </div>
+                                {importing ? "Importing..." : "📥 Import from Excel"}
+                            </Button>
+                        </label>
                     </div>
-                ))}
+                </div>
 
-                {theses.length === 0 && <p>No theses submitted yet.</p>}
-            </div>
-        </div>
+                <Row className="g-4">
+                    {theses.map((thesis) => (
+                        <Col key={thesis._id} xs={12}>
+                            <Card className="border-0 shadow-sm">
+                                <Card.Body>
+                                    <div className="d-flex flex-column flex-md-row justify-content-between align-items-start mb-3 gap-2">
+                                        <h5 className="mb-0 fw-bold flex-grow-1">🎓 {thesis.title}</h5>
+                                        <Badge bg={getStatusVariant(thesis.status)} className="text-nowrap">
+                                            {thesis.status.replace('_', ' ')}
+                                        </Badge>
+                                    </div>
+
+                                    <p className="text-muted mb-3">{thesis.abstract}</p>
+
+                                    <div className="small text-muted mb-3">
+                                        <div className="mb-1">
+                                            <strong>Student:</strong> {thesis.student?.name} ({thesis.student?.email})
+                                        </div>
+                                        <div>
+                                            <strong>Current Supervisor:</strong> {thesis.supervisor?.name || "Not assigned"}
+                                        </div>
+                                    </div>
+
+                                    <Row className="g-3 align-items-end">
+                                        <Col xs={12} sm={6} md={4}>
+                                            <Form.Group>
+                                                <Form.Label className="small fw-semibold mb-1">Update Status</Form.Label>
+                                                <Form.Select
+                                                    size="sm"
+                                                    value={thesis.status}
+                                                    onChange={(e) => handleUpdate(thesis._id, { status: e.target.value })}
+                                                >
+                                                    <option value="submitted">Submitted</option>
+                                                    <option value="under_review">Under Review</option>
+                                                    <option value="approved">Approved</option>
+                                                    <option value="scheduled">Scheduled</option>
+                                                    <option value="completed">Completed</option>
+                                                </Form.Select>
+                                            </Form.Group>
+                                        </Col>
+
+                                        <Col xs={12} sm={6} md={4}>
+                                            <Form.Group>
+                                                <Form.Label className="small fw-semibold mb-1">Reassign Supervisor</Form.Label>
+                                                <Form.Select
+                                                    size="sm"
+                                                    value={thesis.supervisor?._id || ""}
+                                                    onChange={(e) => handleUpdate(thesis._id, { supervisor: e.target.value })}
+                                                >
+                                                    <option value="">Select Professor</option>
+                                                    {professors.map(p => (
+                                                        <option key={p._id} value={p._id}>{p.name}</option>
+                                                    ))}
+                                                </Form.Select>
+                                            </Form.Group>
+                                        </Col>
+
+                                        <Col xs={12} md={4} className="d-flex justify-content-md-end">
+                                            <Button
+                                                variant="danger"
+                                                size="sm"
+                                                onClick={() => handleDelete(thesis._id)}
+                                                className="w-100 w-md-auto"
+                                            >
+                                                🗑️ Delete
+                                            </Button>
+                                        </Col>
+                                    </Row>
+                                </Card.Body>
+                            </Card>
+                        </Col>
+                    ))}
+                </Row>
+
+                {theses.length === 0 && (
+                    <Alert variant="info" className="text-center mt-4">
+                        No theses submitted yet. Import data from Excel to get started!
+                    </Alert>
+                )}
+            </Container>
+        </Container>
     );
 };
 

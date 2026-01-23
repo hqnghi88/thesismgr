@@ -1,5 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client'     // used to render your React components into the real HTML DOM
+import 'bootstrap/dist/css/bootstrap.min.css';
 import App from './App.jsx'
 
 

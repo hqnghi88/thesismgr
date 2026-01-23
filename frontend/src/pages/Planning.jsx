@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
-import "./Dashboard.css";
+import { Container, Row, Col, Card, Button, Modal, Form, Badge, ListGroup, Alert } from "react-bootstrap";
 
 const Planning = () => {
     const [schedules, setSchedules] = useState([]);
@@ -15,6 +15,7 @@ const Planning = () => {
         endTime: '',
         room: ''
     });
+    const [error, setError] = useState('');
     const token = localStorage.getItem("token");
 
     const fetchSchedules = async () => {
@@ -49,6 +50,7 @@ const Planning = () => {
             endTime: new Date(schedule.endTime).toISOString().slice(0, 16),
             room: schedule.room
         });
+        setError('');
     };
 
     const handleCancelEdit = () => {
@@ -61,10 +63,12 @@ const Planning = () => {
             endTime: '',
             room: ''
         });
+        setError('');
     };
 
     const handleUpdateSchedule = async (e) => {
         e.preventDefault();
+        setError('');
         try {
             await axios.put(`${import.meta.env.VITE_API_URL}/api/schedule/${editingSchedule}`, {
                 ...editForm,
@@ -76,7 +80,7 @@ const Planning = () => {
             handleCancelEdit();
             fetchSchedules();
         } catch (err) {
-            alert("Error updating schedule");
+            setError(err.response?.data?.message || "Error updating schedule");
         }
     };
 
@@ -93,7 +97,6 @@ const Planning = () => {
     };
 
     const handleAutoPlan = async () => {
-
         setLoading(true);
         try {
             await axios.post(`${import.meta.env.VITE_API_URL}/api/schedule/auto-plan`, {}, {
@@ -113,8 +116,8 @@ const Planning = () => {
                 headers: { Authorization: `Bearer ${token}` },
                 responseType: 'blob'
             });
-
-            const url = window.URL.createObjectURL(new Blob([res.data]));
+            const blob = new Blob([res.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            const url = window.URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
             link.setAttribute('download', 'jury_schedule_export.xlsx');
@@ -132,178 +135,194 @@ const Planning = () => {
     }, []);
 
     return (
-        <div className="dashboard-container">
-            <h2 className="dashboard-heading">Jury Planning</h2>
+        <Container fluid className="py-4" style={{ marginTop: '70px', backgroundColor: '#f8f9fa', minHeight: '100vh' }}>
+            <Container>
+                <h2 className="mb-4 fw-bold">📅 Jury Planning</h2>
 
-            <div style={{ marginBottom: '20px', display: 'flex', gap: '10px' }}>
-                <button
-                    onClick={handleAutoPlan}
-                    disabled={loading}
-                    style={{ padding: '10px 20px', backgroundColor: '#10b981', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' }}
-                >
-                    {loading ? "Planning..." : "Run Auto-Planning"}
-                </button>
-                <button
-                    onClick={handleExport}
-                    style={{ padding: '10px 20px', backgroundColor: '#3b82f6', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' }}
-                >
-                    📥 Export to Excel
-                </button>
-            </div>
+                {/* Action Buttons */}
+                <Card className="border-0 shadow-sm mb-4">
+                    <Card.Body>
+                        <div className="d-flex gap-2 flex-wrap">
+                            <Button
+                                variant="success"
+                                onClick={handleAutoPlan}
+                                disabled={loading}
+                            >
+                                {loading ? "Planning..." : "🤖 Run Auto-Planning"}
+                            </Button>
+                            <Button variant="primary" onClick={handleExport}>
+                                📥 Export to Excel
+                            </Button>
+                        </div>
+                    </Card.Body>
+                </Card>
 
-            {editingSchedule && (
-                <div style={{
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    backgroundColor: 'rgba(0,0,0,0.5)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    zIndex: 1000
-                }}>
-                    <div style={{
-                        backgroundColor: 'white',
-                        padding: '30px',
-                        borderRadius: '12px',
-                        width: '90%',
-                        maxWidth: '600px',
-                        maxHeight: '90vh',
-                        overflow: 'auto'
-                    }}>
-                        <h3 style={{ marginTop: 0 }}>Edit Schedule</h3>
-                        <form onSubmit={handleUpdateSchedule}>
-                            <div style={{ marginBottom: '15px' }}>
-                                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Principal</label>
-                                <select
-                                    value={editForm.principal}
-                                    onChange={(e) => setEditForm({ ...editForm, principal: e.target.value })}
-                                    style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ddd' }}
-                                    required
-                                >
-                                    <option value="">Select Principal</option>
-                                    {professors.map(prof => (
-                                        <option key={prof._id} value={prof._id}>{prof.name}</option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div style={{ marginBottom: '15px' }}>
-                                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Examinator</label>
-                                <select
-                                    value={editForm.examinator}
-                                    onChange={(e) => setEditForm({ ...editForm, examinator: e.target.value })}
-                                    style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ddd' }}
-                                    required
-                                >
-                                    <option value="">Select Examinator</option>
-                                    {professors.map(prof => (
-                                        <option key={prof._id} value={prof._id}>{prof.name}</option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div style={{ marginBottom: '15px' }}>
-                                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Supervisor</label>
-                                <select
-                                    value={editForm.supervisor}
-                                    onChange={(e) => setEditForm({ ...editForm, supervisor: e.target.value })}
-                                    style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ddd' }}
-                                    required
-                                >
-                                    <option value="">Select Supervisor</option>
-                                    {professors.map(prof => (
-                                        <option key={prof._id} value={prof._id}>{prof.name}</option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div style={{ marginBottom: '15px' }}>
-                                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Start Time</label>
-                                <input
-                                    type="datetime-local"
-                                    value={editForm.startTime}
-                                    onChange={(e) => setEditForm({ ...editForm, startTime: e.target.value })}
-                                    style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ddd' }}
-                                    required
-                                />
-                            </div>
-                            <div style={{ marginBottom: '15px' }}>
-                                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>End Time</label>
-                                <input
-                                    type="datetime-local"
-                                    value={editForm.endTime}
-                                    onChange={(e) => setEditForm({ ...editForm, endTime: e.target.value })}
-                                    style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ddd' }}
-                                    required
-                                />
-                            </div>
-                            <div style={{ marginBottom: '15px' }}>
-                                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Room</label>
-                                <input
-                                    type="text"
-                                    value={editForm.room}
-                                    onChange={(e) => setEditForm({ ...editForm, room: e.target.value })}
-                                    style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ddd' }}
-                                    required
-                                />
-                            </div>
-                            <div style={{ display: 'flex', gap: '10px' }}>
-                                <button
-                                    type="submit"
-                                    style={{ flex: 1, padding: '10px', backgroundColor: '#10b981', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
-                                >
-                                    Update Schedule
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={handleCancelEdit}
-                                    style={{ flex: 1, padding: '10px', backgroundColor: '#6b7280', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
-                                >
+                {/* Edit Modal */}
+                <Modal show={editingSchedule !== null} onHide={handleCancelEdit} size="lg">
+                    <Modal.Header closeButton>
+                        <Modal.Title>Edit Schedule</Modal.Title>
+                    </Modal.Header>
+                    <Modal.Body>
+                        {error && <Alert variant="danger">{error}</Alert>}
+                        <Form onSubmit={handleUpdateSchedule}>
+                            <Row>
+                                <Col md={6} className="mb-3">
+                                    <Form.Group>
+                                        <Form.Label className="fw-semibold">Principal</Form.Label>
+                                        <Form.Select
+                                            value={editForm.principal}
+                                            onChange={(e) => setEditForm({ ...editForm, principal: e.target.value })}
+                                            required
+                                        >
+                                            <option value="">Select Principal</option>
+                                            {professors.map(prof => (
+                                                <option key={prof._id} value={prof._id}>{prof.name}</option>
+                                            ))}
+                                        </Form.Select>
+                                    </Form.Group>
+                                </Col>
+                                <Col md={6} className="mb-3">
+                                    <Form.Group>
+                                        <Form.Label className="fw-semibold">Examinator</Form.Label>
+                                        <Form.Select
+                                            value={editForm.examinator}
+                                            onChange={(e) => setEditForm({ ...editForm, examinator: e.target.value })}
+                                            required
+                                        >
+                                            <option value="">Select Examinator</option>
+                                            {professors.map(prof => (
+                                                <option key={prof._id} value={prof._id}>{prof.name}</option>
+                                            ))}
+                                        </Form.Select>
+                                    </Form.Group>
+                                </Col>
+                                <Col md={6} className="mb-3">
+                                    <Form.Group>
+                                        <Form.Label className="fw-semibold">Supervisor</Form.Label>
+                                        <Form.Select
+                                            value={editForm.supervisor}
+                                            onChange={(e) => setEditForm({ ...editForm, supervisor: e.target.value })}
+                                            required
+                                        >
+                                            <option value="">Select Supervisor</option>
+                                            {professors.map(prof => (
+                                                <option key={prof._id} value={prof._id}>{prof.name}</option>
+                                            ))}
+                                        </Form.Select>
+                                    </Form.Group>
+                                </Col>
+                                <Col md={6} className="mb-3">
+                                    <Form.Group>
+                                        <Form.Label className="fw-semibold">Room</Form.Label>
+                                        <Form.Control
+                                            type="text"
+                                            value={editForm.room}
+                                            onChange={(e) => setEditForm({ ...editForm, room: e.target.value })}
+                                            required
+                                        />
+                                    </Form.Group>
+                                </Col>
+                                <Col md={6} className="mb-3">
+                                    <Form.Group>
+                                        <Form.Label className="fw-semibold">Start Time</Form.Label>
+                                        <Form.Control
+                                            type="datetime-local"
+                                            value={editForm.startTime}
+                                            onChange={(e) => setEditForm({ ...editForm, startTime: e.target.value })}
+                                            required
+                                        />
+                                    </Form.Group>
+                                </Col>
+                                <Col md={6} className="mb-3">
+                                    <Form.Group>
+                                        <Form.Label className="fw-semibold">End Time</Form.Label>
+                                        <Form.Control
+                                            type="datetime-local"
+                                            value={editForm.endTime}
+                                            onChange={(e) => setEditForm({ ...editForm, endTime: e.target.value })}
+                                            required
+                                        />
+                                    </Form.Group>
+                                </Col>
+                            </Row>
+                            <div className="d-flex gap-2 justify-content-end">
+                                <Button variant="secondary" onClick={handleCancelEdit}>
                                     Cancel
-                                </button>
+                                </Button>
+                                <Button variant="success" type="submit">
+                                    Update Schedule
+                                </Button>
                             </div>
-                        </form>
-                    </div>
-                </div>
-            )}
+                        </Form>
+                    </Modal.Body>
+                </Modal>
 
-            <div className="tasks-container">
-                {schedules.map((schedule) => (
-                    <div key={schedule._id} className="task-card" style={{ borderLeftColor: '#10b981' }}>
-                        <div className="task-title">📅 {schedule.thesis?.title || "Untitled Thesis"}</div>
-                        <div className="task-desc">
-                            <strong>Room:</strong> {schedule.room}<br />
-                            <strong>Time:</strong> {new Date(schedule.startTime).toLocaleString()} - {new Date(schedule.endTime).toLocaleTimeString()}
-                        </div>
-                        <div className="task-meta">
-                            <strong>Jury Composition:</strong>
-                            <ul style={{ listStyleType: 'none', paddingLeft: '10px' }}>
-                                <li>👤 <strong>Student:</strong> {schedule.student?.name}</li>
-                                <li>👨‍🏫 <strong>Supervisor:</strong> {schedule.supervisor?.name}</li>
-                                <li>🎯 <strong>Principal:</strong> {schedule.principal?.name}</li>
-                                <li>🔍 <strong>Examinator:</strong> {schedule.examinator?.name}</li>
-                            </ul>
-                        </div>
-                        <div style={{ marginTop: '10px', textAlign: 'right', display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-                            <button
-                                onClick={() => handleEdit(schedule)}
-                                style={{ background: '#3b82f6', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer' }}
-                            >
-                                ✏️ Edit
-                            </button>
-                            <button
-                                onClick={() => handleDelete(schedule._id)}
-                                style={{ background: '#ef4444', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer' }}
-                            >
-                                🗑️ Remove Schedule
-                            </button>
-                        </div>
-                    </div>
-                ))}
+                {/* Schedules List */}
+                <Row className="g-4">
+                    {schedules.map((schedule) => (
+                        <Col key={schedule._id} lg={6} xl={4}>
+                            <Card className="border-0 shadow-sm h-100 border-start border-success border-4">
+                                <Card.Body>
+                                    <h5 className="fw-bold mb-3">📅 {schedule.thesis?.title || "Untitled Thesis"}</h5>
 
-                {schedules.length === 0 && <p>No schedules planned yet.</p>}
-            </div>
-        </div>
+                                    <div className="mb-3">
+                                        <div className="d-flex justify-content-between mb-2">
+                                            <span className="fw-semibold">Room:</span>
+                                            <Badge bg="info">{schedule.room}</Badge>
+                                        </div>
+                                        <div className="small text-muted">
+                                            <div><strong>Start:</strong> {new Date(schedule.startTime).toLocaleString()}</div>
+                                            <div><strong>End:</strong> {new Date(schedule.endTime).toLocaleTimeString()}</div>
+                                        </div>
+                                    </div>
+
+                                    <div className="mb-3">
+                                        <h6 className="fw-semibold mb-2">Jury Composition:</h6>
+                                        <ListGroup variant="flush" className="small">
+                                            <ListGroup.Item className="px-0 py-1 border-0">
+                                                👤 <strong>Student:</strong> {schedule.student?.name}
+                                            </ListGroup.Item>
+                                            <ListGroup.Item className="px-0 py-1 border-0">
+                                                👨‍🏫 <strong>Supervisor:</strong> {schedule.supervisor?.name}
+                                            </ListGroup.Item>
+                                            <ListGroup.Item className="px-0 py-1 border-0">
+                                                🎯 <strong>Principal:</strong> {schedule.principal?.name}
+                                            </ListGroup.Item>
+                                            <ListGroup.Item className="px-0 py-1 border-0">
+                                                🔍 <strong>Examinator:</strong> {schedule.examinator?.name}
+                                            </ListGroup.Item>
+                                        </ListGroup>
+                                    </div>
+
+                                    <div className="d-flex gap-2">
+                                        <Button
+                                            variant="outline-primary"
+                                            size="sm"
+                                            onClick={() => handleEdit(schedule)}
+                                        >
+                                            ✏️ Edit
+                                        </Button>
+                                        <Button
+                                            variant="outline-danger"
+                                            size="sm"
+                                            onClick={() => handleDelete(schedule._id)}
+                                        >
+                                            🗑️ Remove
+                                        </Button>
+                                    </div>
+                                </Card.Body>
+                            </Card>
+                        </Col>
+                    ))}
+                </Row>
+
+                {schedules.length === 0 && (
+                    <Alert variant="info" className="text-center">
+                        No schedules planned yet. Click "Run Auto-Planning" to generate schedules automatically!
+                    </Alert>
+                )}
+            </Container>
+        </Container>
     );
 };
 
