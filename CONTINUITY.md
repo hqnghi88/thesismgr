@@ -31,6 +31,9 @@
         - Added bulk delete feature for professors and students.
         - Added bulk delete feature for all theses (automatically clears schedules too).
         - Added bulk delete feature for all schedules (resets thesis statuses to approved).
+        - Refined thesis import logic to reuse existing professors by name matching (avoids duplicate accounts).
+        - Implemented data integrity checks to prevent deleting users who are active in the schedule (avoids blank/orphaned positions).
+        - Added visual placeholders ("⚠️ Missing Member") in the UI to easily identify any remaining orphaned records.
 
     - Now:
         - All requested features implemented and verified.

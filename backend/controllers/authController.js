@@ -100,10 +100,29 @@ const updateUserRole = async (req, res) => {
 
 const deleteUser = async (req, res) => {
   try {
-    const user = await User.findByIdAndDelete(req.params.id);
+    const userId = req.params.id;
+    // Check if user is assigned to any active schedules
+    const Schedule = require("../models/Schedule");
+    const isBusy = await Schedule.findOne({
+      $or: [
+        { principal: userId },
+        { examinator: userId },
+        { supervisor: userId },
+        { student: userId }
+      ]
+    });
+
+    if (isBusy) {
+      return res.status(400).json({
+        message: "Cannot delete user. They are currently assigned to an active jury schedule. Please Clear All Planned first."
+      });
+    }
+
+    const user = await User.findByIdAndDelete(userId);
     if (!user) return res.status(404).json({ message: "User not found" });
     res.status(200).json({ message: "User deleted successfully" });
   } catch (error) {
+    console.error("Delete User Error:", error);
     res.status(500).json({ message: "Server error" });
   }
 };
@@ -149,9 +168,30 @@ const deleteUsersByRole = async (req, res) => {
     if (!['student', 'professor'].includes(role)) {
       return res.status(400).json({ message: "Invalid role for bulk delete" });
     }
+
+    const Schedule = require("../models/Schedule");
+    const users = await User.find({ role });
+    const userIds = users.map(u => u._id);
+
+    const isBusy = await Schedule.findOne({
+      $or: [
+        { principal: { $in: userIds } },
+        { examinator: { $in: userIds } },
+        { supervisor: { $in: userIds } },
+        { student: { $in: userIds } }
+      ]
+    });
+
+    if (isBusy) {
+      return res.status(400).json({
+        message: `Cannot delete all ${role}s. Some are assigned to active jury schedules. Please Clear All Planned first.`
+      });
+    }
+
     const result = await User.deleteMany({ role });
     res.status(200).json({ message: `Successfully deleted ${result.deletedCount} ${role}s` });
   } catch (error) {
+    console.error("Bulk Delete Error:", error);
     res.status(500).json({ message: "Server error" });
   }
 };

@@ -254,7 +254,7 @@ const Planning = () => {
                                         {loading ? "Planning..." : "🤖 Run Auto-Planning"}
                                     </Button>
                                     <Button variant="outline-danger" onClick={handleDeleteAllSchedules}>
-                                        🗑️ Delete All Schedules
+                                        🗑️ Clear All Planned
                                     </Button>
                                     <Button variant="primary" onClick={handleExport}>
                                         📥 Export to Excel
@@ -408,16 +408,16 @@ const Planning = () => {
                                             <h6 className="fw-semibold mb-2">Jury Composition:</h6>
                                             <ListGroup variant="flush" className="small">
                                                 <ListGroup.Item className="px-0 py-1 border-0">
-                                                    👤 <strong>Student:</strong> {schedule.student?.name}
+                                                    👤 <strong>Student:</strong> {schedule.student?.name || "⚠️ Missing student"}
                                                 </ListGroup.Item>
                                                 <ListGroup.Item className="px-0 py-1 border-0">
-                                                    👨‍🏫 <strong>Supervisor:</strong> {schedule.supervisor?.name}
+                                                    👨‍🏫 <strong>Supervisor:</strong> {schedule.supervisor?.name || "⚠️ Missing supervisor"}
                                                 </ListGroup.Item>
                                                 <ListGroup.Item className="px-0 py-1 border-0">
-                                                    🎯 <strong>Principal:</strong> {schedule.principal?.name}
+                                                    🎯 <strong>Principal:</strong> {schedule.principal?.name || "⚠️ Missing principal"}
                                                 </ListGroup.Item>
                                                 <ListGroup.Item className="px-0 py-1 border-0">
-                                                    🔍 <strong>Examinator:</strong> {schedule.examinator?.name}
+                                                    🔍 <strong>Examinator:</strong> {schedule.examinator?.name || "⚠️ Missing examinator"}
                                                 </ListGroup.Item>
                                             </ListGroup>
                                         </div>
@@ -482,7 +482,7 @@ const Planning = () => {
                                                                             👨‍🏫
                                                                             <Dropdown size="sm" className="d-inline">
                                                                                 <Dropdown.Toggle variant="link" className="p-0 text-decoration-none text-muted" style={{ fontSize: '0.85rem' }}>
-                                                                                    {schedule.supervisor?.name}
+                                                                                    {schedule.supervisor?.name || <span className="text-danger fw-bold">⚠️ Missing SV</span>}
                                                                                 </Dropdown.Toggle>
                                                                                 <Dropdown.Menu>
                                                                                     {professors.filter(prof =>
@@ -504,7 +504,7 @@ const Planning = () => {
                                                                             🎯
                                                                             <Dropdown size="sm" className="d-inline">
                                                                                 <Dropdown.Toggle variant="link" className="p-0 text-decoration-none text-muted" style={{ fontSize: '0.85rem' }}>
-                                                                                    {schedule.principal?.name}
+                                                                                    {schedule.principal?.name || <span className="text-danger fw-bold">⚠️ Missing PR</span>}
                                                                                 </Dropdown.Toggle>
                                                                                 <Dropdown.Menu>
                                                                                     {professors.filter(prof =>
@@ -526,7 +526,7 @@ const Planning = () => {
                                                                             🔍
                                                                             <Dropdown size="sm" className="d-inline">
                                                                                 <Dropdown.Toggle variant="link" className="p-0 text-decoration-none text-muted" style={{ fontSize: '0.85rem' }}>
-                                                                                    {schedule.examinator?.name}
+                                                                                    {schedule.examinator?.name || <span className="text-danger fw-bold">⚠️ Missing EX</span>}
                                                                                 </Dropdown.Toggle>
                                                                                 <Dropdown.Menu>
                                                                                     {professors.filter(prof =>

@@ -34,15 +34,21 @@ const getConflicts = async (startTime, room, principalId, examinatorId, supervis
 
 const autoPlan = async (req, res) => {
     try {
+        // 1. Identify which theses need planning
         const scheduledThesisIds = await Schedule.find().distinct('thesis');
         const thesesToSchedule = await Thesis.find({
             _id: { $nin: scheduledThesisIds },
             status: 'approved'
         });
 
-        if (thesesToSchedule.length === 0) {
-            return res.status(200).json({ message: "No approved theses to schedule." });
-        }
+        // 2. Identify existing tentative schedules with missing jury members
+        const partialSchedules = await Schedule.find({
+            $or: [
+                { principal: { $exists: false } }, { principal: null },
+                { examinator: { $exists: false } }, { examinator: null },
+                { supervisor: { $exists: false } }, { supervisor: null }
+            ]
+        });
 
         const professors = await User.find({ role: 'professor' });
         if (professors.length < 3) {
@@ -51,94 +57,114 @@ const autoPlan = async (req, res) => {
 
         const rooms = ["Room 110/DI", "Room 111/DI"];
         const results = [];
+        const updatedSchedules = [];
 
-        // Start from tomorrow at 07:15
-        let currentSlot = new Date();
-        currentSlot.setDate(currentSlot.getDate() + 1);
-        currentSlot.setHours(7, 15, 0, 0);
+        // --- Task A: Fix Partial/Broken Schedules ---
+        for (const s of partialSchedules) {
+            const busyInSlot = await Schedule.find({ startTime: s.startTime, _id: { $ne: s._id } });
+            const busyProfIds = new Set(busyInSlot.flatMap(bs => [
+                bs.principal?.toString(),
+                bs.examinator?.toString(),
+                bs.supervisor?.toString()
+            ]).filter(Boolean));
 
-        for (const thesis of thesesToSchedule) {
-            let found = false;
-            const supervisorId = thesis.supervisor;
+            // Must exclude everyone already in the jury or busy in slot
+            const excludeIds = new Set(busyProfIds);
+            if (s.supervisor) excludeIds.add(s.supervisor.toString());
+            if (s.principal) excludeIds.add(s.principal.toString());
+            if (s.examinator) excludeIds.add(s.examinator.toString());
 
-            // Loop until we find a valid slot
-            while (!found) {
-                // Try each room for this time slot
-                for (const room of rooms) {
-                    // Check if supervisor is available and room is free
-                    const conflicts = await getConflicts(currentSlot, room, null, null, supervisorId);
+            const pool = professors.filter(p => !excludeIds.has(p._id.toString()))
+                .sort(() => 0.5 - Math.random());
 
-                    if (!conflicts.room && !conflicts.profs.includes(supervisorId.toString())) {
-                        // Supervisor is free and room is free. Now find 2 other free professors.
-                        const busyInSlot = await Schedule.find({ startTime: currentSlot });
-                        const busyProfIds = new Set(busyInSlot.flatMap(s => [
-                            s.principal.toString(),
-                            s.examinator.toString(),
-                            s.supervisor.toString()
-                        ]));
-                        busyProfIds.add(supervisorId.toString());
+            let poolIdx = 0;
+            if (!s.supervisor && poolIdx < pool.length) s.supervisor = pool[poolIdx++]._id;
+            if (!s.principal && poolIdx < pool.length) s.principal = pool[poolIdx++]._id;
+            if (!s.examinator && poolIdx < pool.length) s.examinator = pool[poolIdx++]._id;
 
-                        const availableProfs = professors.filter(p => !busyProfIds.has(p._id.toString()));
+            await s.save();
+            updatedSchedules.push(s);
+        }
 
-                        // Shuffle to randomize
-                        availableProfs.sort(() => 0.5 - Math.random());
+        // --- Task B: Plan New Theses ---
+        if (thesesToSchedule.length > 0) {
+            // Start from tomorrow at 07:15
+            let currentSlot = new Date();
+            currentSlot.setDate(currentSlot.getDate() + 1);
+            currentSlot.setHours(7, 15, 0, 0);
 
-                        if (availableProfs.length >= 2) {
-                            const principal = availableProfs[0]._id;
-                            const examinator = availableProfs[1]._id;
+            for (const thesis of thesesToSchedule) {
+                let found = false;
+                const supervisorId = thesis.supervisor?.toString();
 
-                            const startTime = new Date(currentSlot);
-                            const endTime = new Date(currentSlot);
-                            endTime.setMinutes(startTime.getMinutes() + 35);
+                if (!supervisorId) continue; // Skip if data is corrupted
 
-                            const newSchedule = new Schedule({
-                                thesis: thesis._id,
-                                principal,
-                                examinator,
-                                supervisor: supervisorId,
-                                student: thesis.student,
-                                startTime,
-                                endTime,
-                                room
-                            });
+                while (!found) {
+                    for (const room of rooms) {
+                        const conflicts = await getConflicts(currentSlot, room, null, null, supervisorId);
 
-                            await newSchedule.save();
-                            thesis.status = 'scheduled';
-                            await thesis.save();
-                            results.push(newSchedule);
-                            found = true;
-                            break; // Exit room loop
+                        if (!conflicts.room && !conflicts.profs.includes(supervisorId)) {
+                            const busyInSlot = await Schedule.find({ startTime: currentSlot });
+                            const busyProfIds = new Set(busyInSlot.flatMap(s => [
+                                s.principal?.toString(),
+                                s.examinator?.toString(),
+                                s.supervisor?.toString()
+                            ]).filter(Boolean));
+
+                            // Exclude supervisor and anyone busy
+                            const excludeIds = new Set(busyProfIds);
+                            excludeIds.add(supervisorId);
+
+                            const availableProfs = professors.filter(p => !excludeIds.has(p._id.toString()))
+                                .sort(() => 0.5 - Math.random());
+
+                            if (availableProfs.length >= 2) {
+                                const newSchedule = new Schedule({
+                                    thesis: thesis._id,
+                                    principal: availableProfs[0]._id,
+                                    examinator: availableProfs[1]._id,
+                                    supervisor: thesis.supervisor,
+                                    student: thesis.student,
+                                    startTime: new Date(currentSlot),
+                                    endTime: new Date(new Date(currentSlot).setMinutes(currentSlot.getMinutes() + 35)),
+                                    room
+                                });
+
+                                await newSchedule.save();
+                                thesis.status = 'scheduled';
+                                await thesis.save();
+                                results.push(newSchedule);
+                                found = true;
+                                break;
+                            }
                         }
                     }
-                }
 
-                if (!found) {
-                    // Move to next time slot
-                    currentSlot.setMinutes(currentSlot.getMinutes() + 35);
-
-                    const hours = currentSlot.getHours();
-                    const minutes = currentSlot.getMinutes();
-                    const totalMinutes = hours * 60 + minutes;
-
-                    // Morning shift ends around 11:20, jump to afternoon 13:30
-                    if (totalMinutes > 11 * 60 + 20 && totalMinutes < 13 * 60 + 30) {
-                        currentSlot.setHours(13, 30, 0, 0);
-                    }
-                    // If after 17:35, jump to next day 07:15
-                    else if (totalMinutes > 17 * 60 + 35) {
-                        currentSlot.setDate(currentSlot.getDate() + 1);
-                        currentSlot.setHours(7, 15, 0, 0);
+                    if (!found) {
+                        currentSlot.setMinutes(currentSlot.getMinutes() + 35);
+                        const totalMinutes = currentSlot.getHours() * 60 + currentSlot.getMinutes();
+                        if (totalMinutes > 11 * 60 + 20 && totalMinutes < 13 * 60 + 30) {
+                            currentSlot.setHours(13, 30, 0, 0);
+                        } else if (totalMinutes > 17 * 60 + 35) {
+                            currentSlot.setDate(currentSlot.getDate() + 1);
+                            currentSlot.setHours(7, 15, 0, 0);
+                        }
                     }
                 }
             }
         }
 
-        res.status(201).json({ message: "Automatic planning completed", scheduled: results });
+        res.status(201).json({
+            message: "Automatic planning completed",
+            scheduled: results.length,
+            fixed: updatedSchedules.length
+        });
     } catch (error) {
         console.error("Auto-plan Error:", error.message);
         res.status(500).json({ message: "Server error during planning" });
     }
 };
+
 
 const getSchedules = async (req, res) => {
     try {
