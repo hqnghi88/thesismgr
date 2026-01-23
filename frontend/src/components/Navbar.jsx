@@ -35,7 +35,10 @@ const Navbar = () => {
         {token ? (
           <>
             <li>
-              <Link to="/">Theses</Link>
+              <Link to="/">Dashboard</Link>
+            </li>
+            <li>
+              <Link to="/theses">Theses</Link>
             </li>
             <li>
               <Link to="/planning">Planning</Link>

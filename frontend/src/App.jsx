@@ -2,6 +2,7 @@ import React from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import Dashboard from "./pages/Dashboard";
 import Theses from "./pages/Theses";
 import Planning from "./pages/Planning";
 import AdminUsers from "./pages/AdminUsers";
@@ -28,6 +29,14 @@ function App() {
         <Routes>
           <Route
             path="/"
+            element={
+              <ProtectedRoute>
+                <Dashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/theses"
             element={
               <ProtectedRoute>
                 <Theses />
