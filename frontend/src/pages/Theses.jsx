@@ -5,6 +5,7 @@ import "./Dashboard.css";
 const Theses = () => {
     const [theses, setTheses] = useState([]);
     const [form, setForm] = useState({ title: "", abstract: "", supervisor: "" });
+    const [editingId, setEditingId] = useState(null);
     const [professors, setProfessors] = useState([]);
     const token = localStorage.getItem("token");
 
@@ -38,14 +39,38 @@ const Theses = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
-            await axios.post(`${import.meta.env.VITE_API_URL}/api/theses`, form, {
-                headers: { Authorization: `Bearer ${token}` },
-            });
+            if (editingId) {
+                // Update existing thesis
+                await axios.put(`${import.meta.env.VITE_API_URL}/api/theses/${editingId}`, form, {
+                    headers: { Authorization: `Bearer ${token}` },
+                });
+                setEditingId(null);
+            } else {
+                // Create new thesis
+                await axios.post(`${import.meta.env.VITE_API_URL}/api/theses`, form, {
+                    headers: { Authorization: `Bearer ${token}` },
+                });
+            }
             setForm({ title: "", abstract: "", supervisor: "" });
             fetchTheses();
         } catch (err) {
             console.error("error:", err.response?.data || err.message);
         }
+    };
+
+    const handleEdit = (thesis) => {
+        setEditingId(thesis._id);
+        setForm({
+            title: thesis.title,
+            abstract: thesis.abstract,
+            supervisor: thesis.supervisor._id
+        });
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    const handleCancelEdit = () => {
+        setEditingId(null);
+        setForm({ title: "", abstract: "", supervisor: "" });
     };
 
     const handleDelete = async (thesisId) => {
@@ -63,7 +88,7 @@ const Theses = () => {
 
     return (
         <div className="dashboard-container">
-            <h2 className="dashboard-heading">Thesis Management</h2>
+            <h2 className="dashboard-heading">{editingId ? "Edit Thesis" : "Thesis Management"}</h2>
 
             <form className="task-form" onSubmit={handleSubmit}>
                 <div className="task-form-container">
@@ -93,7 +118,20 @@ const Theses = () => {
                             <option key={prof._id} value={prof._id}>{prof.name}</option>
                         ))}
                     </select>
-                    <button style={{ backgroundColor: "#4f46e5" }} type="submit">Submit Thesis</button>
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                        <button style={{ backgroundColor: "#4f46e5", flex: 1 }} type="submit">
+                            {editingId ? "Update Thesis" : "Submit Thesis"}
+                        </button>
+                        {editingId && (
+                            <button
+                                type="button"
+                                onClick={handleCancelEdit}
+                                style={{ backgroundColor: "#6b7280", flex: 1 }}
+                            >
+                                Cancel
+                            </button>
+                        )}
+                    </div>
                 </div>
             </form>
 
@@ -110,7 +148,20 @@ const Theses = () => {
                             Student: {thesis.student?.name}<br />
                             Supervisor: {thesis.supervisor?.name}
                         </div>
-                        <div style={{ marginTop: '10px', textAlign: 'right' }}>
+                        <div style={{ marginTop: '10px', textAlign: 'right', display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                            <button
+                                onClick={() => handleEdit(thesis)}
+                                style={{
+                                    background: '#3b82f6',
+                                    color: 'white',
+                                    border: 'none',
+                                    padding: '5px 10px',
+                                    borderRadius: '4px',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                ✏️ Edit
+                            </button>
                             <button
                                 onClick={() => handleDelete(thesis._id)}
                                 style={{

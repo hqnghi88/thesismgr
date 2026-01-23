@@ -18,11 +18,15 @@
         - Admin user management implemented with full CRUD.
         - Thesis audit and assignment capabilities added with Delete support.
         - Excel Import feature implemented for bulk data entry.
-        - Auto-scheduling logic with manual removal (Delete) verified.
-
+        - Refined auto-planning logic to match `juries.xlsx` template (35-min slots, 07:15/13:30 shifts).
+        - Excel Export feature to download schedules in template format.
+        - Edit functionality added to thesis cards (students can edit their own theses).
+        - Edit functionality added to schedule/planning cards (admins can modify jury, time, room).
+        - Manual removal (Delete) of schedules verified.
 
     - Now:
-        - Project fully functional and transition complete.
+        - All requested features implemented and verified.
+
     - Next:
         - Maintenance or further feature expansion as requested.
 - Open questions:
