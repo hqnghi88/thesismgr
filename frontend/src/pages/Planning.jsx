@@ -18,7 +18,20 @@ const Planning = () => {
         }
     };
 
+    const handleDelete = async (id) => {
+        if (!window.confirm("Are you sure you want to delete this schedule?")) return;
+        try {
+            await axios.delete(`${import.meta.env.VITE_API_URL}/api/schedule/${id}`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            fetchSchedules();
+        } catch (err) {
+            alert("Error deleting schedule");
+        }
+    };
+
     const handleAutoPlan = async () => {
+
         setLoading(true);
         try {
             await axios.post(`${import.meta.env.VITE_API_URL}/api/schedule/auto-plan`, {}, {
@@ -67,8 +80,17 @@ const Planning = () => {
                                 <li>🔍 <strong>Examinator:</strong> {schedule.examinator?.name}</li>
                             </ul>
                         </div>
+                        <div style={{ marginTop: '10px', textAlign: 'right' }}>
+                            <button
+                                onClick={() => handleDelete(schedule._id)}
+                                style={{ background: '#ef4444', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer' }}
+                            >
+                                🗑️ Remove Schedule
+                            </button>
+                        </div>
                     </div>
                 ))}
+
                 {schedules.length === 0 && <p>No schedules planned yet.</p>}
             </div>
         </div>

@@ -101,4 +101,21 @@ const getSchedules = async (req, res) => {
     }
 };
 
-module.exports = { autoPlan, getSchedules };
+const deleteSchedule = async (req, res) => {
+    try {
+        const schedule = await Schedule.findById(req.params.id);
+        if (!schedule) return res.status(404).json({ message: "Schedule not found" });
+
+        // Change thesis status back to approved
+        await Thesis.findByIdAndUpdate(schedule.thesis, { status: 'approved' });
+
+        await Schedule.findByIdAndDelete(req.params.id);
+        res.status(200).json({ message: "Schedule deleted successfully" });
+    } catch (error) {
+        console.error("Delete Schedule Error:", error);
+        res.status(500).json({ message: "Server error" });
+    }
+};
+
+module.exports = { autoPlan, getSchedules, deleteSchedule };
+

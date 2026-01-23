@@ -58,6 +58,19 @@ const AdminTheses = () => {
         }
     };
 
+    const handleDelete = async (thesisId) => {
+        if (!window.confirm("Are you sure you want to delete this thesis?")) return;
+        try {
+            await axios.delete(`${import.meta.env.VITE_API_URL}/api/theses/${thesisId}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            fetchData();
+        } catch (err) {
+            alert("Error deleting thesis");
+        }
+    };
+
+
     useEffect(() => {
         fetchData();
     }, []);
@@ -134,9 +147,25 @@ const AdminTheses = () => {
                                     <option key={p._id} value={p._id}>{p.name}</option>
                                 ))}
                             </select>
+
+                            <button
+                                onClick={() => handleDelete(thesis._id)}
+                                style={{
+                                    marginLeft: 'auto',
+                                    background: '#ef4444',
+                                    color: 'white',
+                                    border: 'none',
+                                    padding: '8px 15px',
+                                    borderRadius: '6px',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                🗑️ Delete
+                            </button>
                         </div>
                     </div>
                 ))}
+
                 {theses.length === 0 && <p>No theses submitted yet.</p>}
             </div>
         </div>

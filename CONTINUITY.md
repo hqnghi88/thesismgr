@@ -15,10 +15,11 @@
     - Done:
         - MongoDB/Docker/Backend/Frontend environment setup.
         - Full project restructuring into a Thesis CMS.
-        - Admin user management implemented.
-        - Thesis audit and assignment capabilities added.
+        - Admin user management implemented with full CRUD.
+        - Thesis audit and assignment capabilities added with Delete support.
         - Excel Import feature implemented for bulk data entry.
-        - Auto-scheduling logic verified.
+        - Auto-scheduling logic with manual removal (Delete) verified.
+
 
     - Now:
         - Project fully functional and transition complete.

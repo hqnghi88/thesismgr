@@ -48,6 +48,19 @@ const Theses = () => {
         }
     };
 
+    const handleDelete = async (thesisId) => {
+        if (!window.confirm("Are you sure you want to delete this thesis?")) return;
+        try {
+            await axios.delete(`${import.meta.env.VITE_API_URL}/api/theses/${thesisId}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            fetchTheses();
+        } catch (err) {
+            alert("Error deleting thesis");
+        }
+    };
+
+
     return (
         <div className="dashboard-container">
             <h2 className="dashboard-heading">Thesis Management</h2>
@@ -97,9 +110,25 @@ const Theses = () => {
                             Student: {thesis.student?.name}<br />
                             Supervisor: {thesis.supervisor?.name}
                         </div>
+                        <div style={{ marginTop: '10px', textAlign: 'right' }}>
+                            <button
+                                onClick={() => handleDelete(thesis._id)}
+                                style={{
+                                    background: '#ef4444',
+                                    color: 'white',
+                                    border: 'none',
+                                    padding: '5px 10px',
+                                    borderRadius: '4px',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                🗑️ Delete
+                            </button>
+                        </div>
                     </div>
                 ))}
             </div>
+
         </div>
     );
 };
