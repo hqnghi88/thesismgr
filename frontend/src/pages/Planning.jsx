@@ -242,6 +242,33 @@ const Planning = () => {
     const dayWiseTimetables = generateTimetable();
     const availableRooms = ["Room 110/DI", "Room 111/DI", "Room 112/DI", "Room 113/DI"];
 
+    // Statistical Summary Logic
+    const generateSummary = () => {
+        const stats = {};
+        professors.forEach(p => {
+            stats[p._id] = { name: p.name, supervisor: 0, principal: 0, examinator: 0, total: 0 };
+        });
+
+        schedules.forEach(s => {
+            if (s.supervisor?._id && stats[s.supervisor._id]) {
+                stats[s.supervisor._id].supervisor++;
+                stats[s.supervisor._id].total++;
+            }
+            if (s.principal?._id && stats[s.principal._id]) {
+                stats[s.principal._id].principal++;
+                stats[s.principal._id].total++;
+            }
+            if (s.examinator?._id && stats[s.examinator._id]) {
+                stats[s.examinator._id].examinator++;
+                stats[s.examinator._id].total++;
+            }
+        });
+
+        return Object.values(stats).sort((a, b) => b.total - a.total);
+    };
+
+    const professorStats = generateSummary();
+
     return (
         <Container fluid className="py-4" style={{ marginTop: '70px', backgroundColor: '#f8f9fa', minHeight: '100vh' }}>
             <Container fluid>
@@ -250,6 +277,7 @@ const Planning = () => {
                     <ButtonGroup size="sm">
                         <Button variant={viewMode === 'timetable' ? 'primary' : 'outline-primary'} onClick={() => setViewMode('timetable')}>📊 Timetable</Button>
                         <Button variant={viewMode === 'cards' ? 'primary' : 'outline-primary'} onClick={() => setViewMode('cards')}>📋 List View</Button>
+                        <Button variant={viewMode === 'summary' ? 'primary' : 'outline-primary'} onClick={() => setViewMode('summary')}>📈 Summary</Button>
                     </ButtonGroup>
                 </div>
 
@@ -400,6 +428,79 @@ const Planning = () => {
                                 </Card>
                             </div>
                         ))}
+                    </div>
+                )}
+
+                {viewMode === 'summary' && (
+                    <div className="d-flex flex-column gap-4">
+                        {[...new Set(schedules.map(s => new Date(s.startTime).toLocaleDateString()))].sort((a, b) => new Date(a) - new Date(b)).map(date => {
+                            const daySchedules = schedules.filter(s => new Date(s.startTime).toLocaleDateString() === date);
+                            const rooms = [...new Set(daySchedules.map(s => s.room))].sort();
+
+                            return (
+                                <div key={date} className="mb-4">
+                                    <h5 className="fw-bold mb-3 d-flex align-items-center">
+                                        <span className="badge bg-primary me-2">{date}</span>
+                                        Jury Committee Roster
+                                    </h5>
+                                    <Card className="border-0 shadow-sm overflow-hidden">
+                                        <Table bordered hover size="sm" className="mb-0">
+                                            <thead className="table-dark">
+                                                <tr className="small text-center">
+                                                    <th style={{ width: '150px' }}>Room</th>
+                                                    <th className="text-start ps-3">Jury Committee (Principal | SV | EX)</th>
+                                                    <th style={{ width: '120px' }}>Series Size</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="small">
+                                                {rooms.map(room => {
+                                                    const roomSchedules = daySchedules.filter(s => s.room === room)
+                                                        .sort((a, b) => new Date(a.startTime) - new Date(b.startTime));
+
+                                                    const committees = [];
+                                                    roomSchedules.forEach(s => {
+                                                        const juryKey = `${s.principal?._id}-${s.supervisor?._id}-${s.examinator?._id}`;
+                                                        if (committees.length > 0 && committees[committees.length - 1].key === juryKey) {
+                                                            committees[committees.length - 1].count++;
+                                                        } else {
+                                                            committees.push({
+                                                                key: juryKey,
+                                                                names: [s.principal?.name, s.supervisor?.name, s.examinator?.name],
+                                                                count: 1
+                                                            });
+                                                        }
+                                                    });
+
+                                                    return committees.map((c, idx) => (
+                                                        <tr key={`${room}-${idx}`}>
+                                                            {idx === 0 && (
+                                                                <td rowSpan={committees.length} className="text-center fw-bold bg-light align-middle border-end">{room}</td>
+                                                            )}
+                                                            <td className="py-2 text-start ps-3 align-middle">
+                                                                <div className="d-flex align-items-center gap-2">
+                                                                    <Badge bg="white" text="dark" className="border shadow-sm py-2">
+                                                                        <span className="text-primary fw-bold">1. {c.names[0] || "—"}</span>
+                                                                        <span className="mx-2 text-muted">|</span>
+                                                                        <span className="fw-bold text-success">2. {c.names[1] || "—"}</span>
+                                                                        <span className="mx-2 text-muted">|</span>
+                                                                        <span className="text-secondary fw-bold">3. {c.names[2] || "—"}</span>
+                                                                    </Badge>
+                                                                </div>
+                                                            </td>
+                                                            <td className="text-center align-middle">
+                                                                <Badge bg="info" pill className="px-3">
+                                                                    {c.count} sessions
+                                                                </Badge>
+                                                            </td>
+                                                        </tr>
+                                                    ));
+                                                })}
+                                            </tbody>
+                                        </Table>
+                                    </Card>
+                                </div>
+                            );
+                        })}
                     </div>
                 )}
 
