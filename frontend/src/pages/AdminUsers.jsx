@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
-import "./Dashboard.css";
+import { Container, Row, Col, Card, Button, Form, Badge, Table, Alert, Collapse } from "react-bootstrap";
 
 const AdminUsers = () => {
     const [users, setUsers] = useState([]);
@@ -47,6 +47,7 @@ const AdminUsers = () => {
         setEditId(user._id);
         setForm({ name: user.name, email: user.email, password: "", role: user.role });
         setShowForm(true);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
     const handleDelete = async (userId) => {
@@ -69,125 +70,223 @@ const AdminUsers = () => {
         roleFilter === "all" ? true : user.role === roleFilter
     );
 
+    const getRoleBadgeVariant = (role) => {
+        switch (role) {
+            case 'admin': return 'danger';
+            case 'professor': return 'primary';
+            case 'student': return 'success';
+            default: return 'secondary';
+        }
+    };
+
     return (
-        <div className="dashboard-container">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                <h2 className="dashboard-heading" style={{ margin: 0 }}>User & Staff Management</h2>
-                <button
-                    onClick={() => { setShowForm(!showForm); setEditId(null); setForm({ name: "", email: "", password: "", role: "student" }); }}
-                    style={{ background: '#4f46e5', color: 'white', border: 'none', padding: '10px 20px', borderRadius: '8px', cursor: 'pointer' }}
-                >
-                    {showForm ? "Cancel" : "Add New User"}
-                </button>
-            </div>
+        <Container fluid className="py-4" style={{ marginTop: '70px', backgroundColor: '#f8f9fa', minHeight: '100vh' }}>
+            <Container>
+                <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4 gap-3">
+                    <h2 className="mb-0 fw-bold">👥 User & Staff Management</h2>
+                    <Button
+                        variant="primary"
+                        onClick={() => {
+                            setShowForm(!showForm);
+                            setEditId(null);
+                            setForm({ name: "", email: "", password: "", role: "student" });
+                        }}
+                    >
+                        {showForm ? "Cancel" : "➕ Add New User"}
+                    </Button>
+                </div>
 
-            {showForm && (
-                <form className="task-form" onSubmit={handleSubmit} style={{ marginBottom: '30px', background: 'white', padding: '20px', borderRadius: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
-                    <h3 style={{ marginTop: 0 }}>{editId ? "Edit User" : "Create New User"}</h3>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-                        <input
-                            type="text"
-                            className="task-input"
-                            placeholder="Full Name"
-                            value={form.name}
-                            onChange={(e) => setForm({ ...form, name: e.target.value })}
-                            required
-                        />
-                        <input
-                            type="email"
-                            className="task-input"
-                            placeholder="Email Address"
-                            value={form.email}
-                            onChange={(e) => setForm({ ...form, email: e.target.value })}
-                            required
-                        />
-                        {!editId && (
-                            <input
-                                type="password"
-                                className="task-input"
-                                placeholder="Password"
-                                value={form.password}
-                                onChange={(e) => setForm({ ...form, password: e.target.value })}
-                                required
-                            />
-                        )}
-                        <select
-                            className="task-input"
-                            value={form.role}
-                            onChange={(e) => setForm({ ...form, role: e.target.value })}
-                            required
-                            style={{ padding: '10px', borderRadius: '6px' }}
-                        >
-                            <option value="student">Student</option>
-                            <option value="professor">Professor</option>
-                            <option value="admin">Admin</option>
-                        </select>
+                {/* Form Card */}
+                <Collapse in={showForm}>
+                    <div>
+                        <Card className="border-0 shadow-sm mb-4">
+                            <Card.Body>
+                                <h5 className="mb-3 fw-bold">{editId ? "✏️ Edit User" : "➕ Create New User"}</h5>
+                                <Form onSubmit={handleSubmit}>
+                                    <Row>
+                                        <Col md={6} className="mb-3">
+                                            <Form.Group>
+                                                <Form.Label className="fw-semibold">Full Name</Form.Label>
+                                                <Form.Control
+                                                    type="text"
+                                                    placeholder="Enter full name"
+                                                    value={form.name}
+                                                    onChange={(e) => setForm({ ...form, name: e.target.value })}
+                                                    required
+                                                />
+                                            </Form.Group>
+                                        </Col>
+                                        <Col md={6} className="mb-3">
+                                            <Form.Group>
+                                                <Form.Label className="fw-semibold">Email Address</Form.Label>
+                                                <Form.Control
+                                                    type="email"
+                                                    placeholder="Enter email"
+                                                    value={form.email}
+                                                    onChange={(e) => setForm({ ...form, email: e.target.value })}
+                                                    required
+                                                />
+                                            </Form.Group>
+                                        </Col>
+                                        {!editId && (
+                                            <Col md={6} className="mb-3">
+                                                <Form.Group>
+                                                    <Form.Label className="fw-semibold">Password</Form.Label>
+                                                    <Form.Control
+                                                        type="password"
+                                                        placeholder="Enter password"
+                                                        value={form.password}
+                                                        onChange={(e) => setForm({ ...form, password: e.target.value })}
+                                                        required
+                                                    />
+                                                </Form.Group>
+                                            </Col>
+                                        )}
+                                        <Col md={6} className="mb-3">
+                                            <Form.Group>
+                                                <Form.Label className="fw-semibold">Role</Form.Label>
+                                                <Form.Select
+                                                    value={form.role}
+                                                    onChange={(e) => setForm({ ...form, role: e.target.value })}
+                                                    required
+                                                >
+                                                    <option value="student">Student</option>
+                                                    <option value="professor">Professor</option>
+                                                    <option value="admin">Admin</option>
+                                                </Form.Select>
+                                            </Form.Group>
+                                        </Col>
+                                        <Col xs={12}>
+                                            <Button variant="primary" type="submit" className="w-100">
+                                                {editId ? "Update User" : "Save User"}
+                                            </Button>
+                                        </Col>
+                                    </Row>
+                                </Form>
+                            </Card.Body>
+                        </Card>
                     </div>
-                    <button type="submit" style={{ marginTop: '15px', width: '100%' }}>
-                        {editId ? "Update User" : "Save User"}
-                    </button>
-                </form>
-            )}
+                </Collapse>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '15px' }}>
-                <label>Filter View:</label>
-                <select
-                    value={roleFilter}
-                    onChange={(e) => setRoleFilter(e.target.value)}
-                    style={{ padding: '8px', borderRadius: '6px', border: '1px solid #ccc' }}
-                >
-                    <option value="all">All Users</option>
-                    <option value="professor">Professors</option>
-                    <option value="student">Students</option>
-                    <option value="admin">Admins</option>
-                </select>
-            </div>
+                {/* Filter */}
+                <Card className="border-0 shadow-sm mb-4">
+                    <Card.Body>
+                        <Row className="align-items-center">
+                            <Col xs={12} sm="auto">
+                                <Form.Label className="mb-2 mb-sm-0 fw-semibold">Filter View:</Form.Label>
+                            </Col>
+                            <Col xs={12} sm="auto">
+                                <Form.Select
+                                    value={roleFilter}
+                                    onChange={(e) => setRoleFilter(e.target.value)}
+                                    style={{ width: '200px' }}
+                                >
+                                    <option value="all">All Users</option>
+                                    <option value="professor">Professors</option>
+                                    <option value="student">Students</option>
+                                    <option value="admin">Admins</option>
+                                </Form.Select>
+                            </Col>
+                        </Row>
+                    </Card.Body>
+                </Card>
 
-            <div className="tasks-container" style={{ padding: 0 }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', background: 'white', borderRadius: '8px', overflow: 'hidden', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
-                    <thead>
-                        <tr style={{ background: '#4f46e5', color: 'white' }}>
-                            <th style={{ padding: '15px', textAlign: 'left' }}>Name</th>
-                            <th style={{ padding: '15px', textAlign: 'left' }}>Email</th>
-                            <th style={{ padding: '15px', textAlign: 'left' }}>Role</th>
-                            <th style={{ padding: '15px', textAlign: 'center' }}>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {filteredUsers.map((user) => (
-                            <tr key={user._id} style={{ borderBottom: '1px solid #eee' }}>
-                                <td style={{ padding: '15px' }}>{user.name}</td>
-                                <td style={{ padding: '15px' }}>{user.email}</td>
-                                <td style={{ padding: '15px' }}>
-                                    <span className={`task-status ${user.role}`} style={{ textTransform: 'capitalize' }}>
-                                        {user.role}
-                                    </span>
-                                </td>
-                                <td style={{ padding: '15px', textAlign: 'center' }}>
-                                    <button
-                                        onClick={() => handleEdit(user)}
-                                        style={{ background: '#facc15', color: '#333', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', marginRight: '8px' }}
-                                    >
-                                        Edit
-                                    </button>
-                                    <button
-                                        onClick={() => handleDelete(user._id)}
-                                        style={{ background: '#ef4444', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer' }}
-                                    >
-                                        Delete
-                                    </button>
-                                </td>
-                            </tr>
-                        ))}
-                        {filteredUsers.length === 0 && (
+                {/* Users Table - Desktop */}
+                <Card className="border-0 shadow-sm d-none d-md-block">
+                    <Table responsive hover className="mb-0">
+                        <thead className="table-primary">
                             <tr>
-                                <td colSpan="4" style={{ padding: '30px', textAlign: 'center', color: '#666' }}>No users found for this filter.</td>
+                                <th>Name</th>
+                                <th>Email</th>
+                                <th>Role</th>
+                                <th className="text-center">Actions</th>
                             </tr>
-                        )}
-                    </tbody>
-                </table>
-            </div>
-        </div>
+                        </thead>
+                        <tbody>
+                            {filteredUsers.map((user) => (
+                                <tr key={user._id}>
+                                    <td className="align-middle">{user.name}</td>
+                                    <td className="align-middle">{user.email}</td>
+                                    <td className="align-middle">
+                                        <Badge bg={getRoleBadgeVariant(user.role)} className="text-capitalize">
+                                            {user.role}
+                                        </Badge>
+                                    </td>
+                                    <td className="align-middle text-center">
+                                        <Button
+                                            variant="outline-warning"
+                                            size="sm"
+                                            onClick={() => handleEdit(user)}
+                                            className="me-2"
+                                        >
+                                            ✏️ Edit
+                                        </Button>
+                                        <Button
+                                            variant="outline-danger"
+                                            size="sm"
+                                            onClick={() => handleDelete(user._id)}
+                                        >
+                                            🗑️ Delete
+                                        </Button>
+                                    </td>
+                                </tr>
+                            ))}
+                            {filteredUsers.length === 0 && (
+                                <tr>
+                                    <td colSpan="4" className="text-center text-muted py-4">
+                                        No users found for this filter.
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </Table>
+                </Card>
+
+                {/* Users Cards - Mobile */}
+                <div className="d-md-none">
+                    <Row className="g-3">
+                        {filteredUsers.map((user) => (
+                            <Col xs={12} key={user._id}>
+                                <Card className="border-0 shadow-sm">
+                                    <Card.Body>
+                                        <div className="d-flex justify-content-between align-items-start mb-2">
+                                            <h6 className="mb-0 fw-bold">{user.name}</h6>
+                                            <Badge bg={getRoleBadgeVariant(user.role)} className="text-capitalize">
+                                                {user.role}
+                                            </Badge>
+                                        </div>
+                                        <p className="text-muted small mb-3">{user.email}</p>
+                                        <div className="d-flex gap-2">
+                                            <Button
+                                                variant="outline-warning"
+                                                size="sm"
+                                                onClick={() => handleEdit(user)}
+                                                className="flex-fill"
+                                            >
+                                                ✏️ Edit
+                                            </Button>
+                                            <Button
+                                                variant="outline-danger"
+                                                size="sm"
+                                                onClick={() => handleDelete(user._id)}
+                                                className="flex-fill"
+                                            >
+                                                🗑️ Delete
+                                            </Button>
+                                        </div>
+                                    </Card.Body>
+                                </Card>
+                            </Col>
+                        ))}
+                    </Row>
+                    {filteredUsers.length === 0 && (
+                        <Alert variant="info" className="text-center">
+                            No users found for this filter.
+                        </Alert>
+                    )}
+                </div>
+            </Container>
+        </Container>
     );
 };
 
