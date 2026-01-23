@@ -3,6 +3,35 @@ const Thesis = require("../models/Thesis");
 const User = require("../models/User");
 const xlsx = require("xlsx");
 
+const getConflicts = async (startTime, room, principalId, examinatorId, supervisorId, excludeScheduleId = null) => {
+    const query = {
+        startTime,
+        _id: { $ne: excludeScheduleId }
+    };
+
+    const existing = await Schedule.find(query);
+
+    const conflicts = {
+        room: false,
+        profs: []
+    };
+
+    const newProfs = [principalId?.toString(), examinatorId?.toString(), supervisorId?.toString()].filter(Boolean);
+
+    existing.forEach(s => {
+        if (room && s.room === room) conflicts.room = true;
+
+        const busyProfs = [s.principal.toString(), s.examinator.toString(), s.supervisor.toString()];
+        newProfs.forEach(p => {
+            if (busyProfs.includes(p) && !conflicts.profs.includes(p)) {
+                conflicts.profs.push(p);
+            }
+        });
+    });
+
+    return conflicts;
+};
+
 const autoPlan = async (req, res) => {
     try {
         const scheduledThesisIds = await Schedule.find().distinct('thesis');
@@ -20,77 +49,87 @@ const autoPlan = async (req, res) => {
             return res.status(400).json({ message: "Not enough professors available (minimum 3 required)." });
         }
 
-        let currentSlot = new Date();
-        currentSlot.setDate(currentSlot.getDate() + 1);
-        currentSlot.setHours(7, 15, 0, 0); // Start at 07:15
-
         const rooms = ["Room 110/DI", "Room 111/DI"];
         const results = [];
-        let slotCountLocal = 0; // To track slots in a day
 
-        for (let i = 0; i < thesesToSchedule.length; i++) {
-            const thesis = thesesToSchedule[i];
+        // Start from tomorrow at 07:15
+        let currentSlot = new Date();
+        currentSlot.setDate(currentSlot.getDate() + 1);
+        currentSlot.setHours(7, 15, 0, 0);
 
-            // 1. Identify Supervisor and Student
-            const supervisor = thesis.supervisor;
-            const student = thesis.student;
+        for (const thesis of thesesToSchedule) {
+            let found = false;
+            const supervisorId = thesis.supervisor;
 
-            // 2. Select Principal and Examinator from other professors
-            const otherProfs = professors.filter(p => p._id.toString() !== supervisor.toString());
+            // Loop until we find a valid slot
+            while (!found) {
+                // Try each room for this time slot
+                for (const room of rooms) {
+                    // Check if supervisor is available and room is free
+                    const conflicts = await getConflicts(currentSlot, room, null, null, supervisorId);
 
-            // Shuffle to randomize
-            const shuffled = otherProfs.sort(() => 0.5 - Math.random());
+                    if (!conflicts.room && !conflicts.profs.includes(supervisorId.toString())) {
+                        // Supervisor is free and room is free. Now find 2 other free professors.
+                        const busyInSlot = await Schedule.find({ startTime: currentSlot });
+                        const busyProfIds = new Set(busyInSlot.flatMap(s => [
+                            s.principal.toString(),
+                            s.examinator.toString(),
+                            s.supervisor.toString()
+                        ]));
+                        busyProfIds.add(supervisorId.toString());
 
-            if (shuffled.length < 2) {
-                return res.status(400).json({ message: `Not enough professors to form a jury for: ${thesis.title}` });
-            }
+                        const availableProfs = professors.filter(p => !busyProfIds.has(p._id.toString()));
 
-            const principal = shuffled[0]._id;
-            const examinator = shuffled[1]._id;
+                        // Shuffle to randomize
+                        availableProfs.sort(() => 0.5 - Math.random());
 
-            // 3. Assign slot and room
-            const room = rooms[Math.floor(slotCountLocal / 8) % rooms.length]; // Swap room every 8 slots or so, simplified
-            const startTime = new Date(currentSlot);
-            const endTime = new Date(currentSlot);
-            endTime.setMinutes(startTime.getMinutes() + 35); // 35 minutes per slot
+                        if (availableProfs.length >= 2) {
+                            const principal = availableProfs[0]._id;
+                            const examinator = availableProfs[1]._id;
 
-            const newSchedule = new Schedule({
-                thesis: thesis._id,
-                principal,
-                examinator,
-                supervisor,
-                student,
-                startTime,
-                endTime,
-                room
-            });
+                            const startTime = new Date(currentSlot);
+                            const endTime = new Date(currentSlot);
+                            endTime.setMinutes(startTime.getMinutes() + 35);
 
-            await newSchedule.save();
+                            const newSchedule = new Schedule({
+                                thesis: thesis._id,
+                                principal,
+                                examinator,
+                                supervisor: supervisorId,
+                                student: thesis.student,
+                                startTime,
+                                endTime,
+                                room
+                            });
 
-            thesis.status = 'scheduled';
-            await thesis.save();
+                            await newSchedule.save();
+                            thesis.status = 'scheduled';
+                            await thesis.save();
+                            results.push(newSchedule);
+                            found = true;
+                            break; // Exit room loop
+                        }
+                    }
+                }
 
-            results.push(newSchedule);
+                if (!found) {
+                    // Move to next time slot
+                    currentSlot.setMinutes(currentSlot.getMinutes() + 35);
 
-            // 4. Update currentSlot for next thesis
-            slotCountLocal++;
-            currentSlot.setMinutes(currentSlot.getMinutes() + 35);
+                    const hours = currentSlot.getHours();
+                    const minutes = currentSlot.getMinutes();
+                    const totalMinutes = hours * 60 + minutes;
 
-            // Check for break/shift change
-            const hours = currentSlot.getHours();
-            const minutes = currentSlot.getMinutes();
-            const totalMinutes = hours * 60 + minutes;
-
-            // Morning shift ends around 11:20 (7 slots: 07:15, 07:50, 08:25, 09:00, 09:35, 10:10, 10:45 -> 11:20)
-            // If we hit roughly 12:00 or more, jump to afternoon shift 13:30
-            if (totalMinutes > 11 * 60 + 20 && totalMinutes < 13 * 60 + 30) {
-                currentSlot.setHours(13, 30, 0, 0);
-            }
-            // If we hit after 17:35, jump to next day 07:15
-            else if (totalMinutes > 17 * 60 + 35) {
-                currentSlot.setDate(currentSlot.getDate() + 1);
-                currentSlot.setHours(7, 15, 0, 0);
-                slotCountLocal = 0;
+                    // Morning shift ends around 11:20, jump to afternoon 13:30
+                    if (totalMinutes > 11 * 60 + 20 && totalMinutes < 13 * 60 + 30) {
+                        currentSlot.setHours(13, 30, 0, 0);
+                    }
+                    // If after 17:35, jump to next day 07:15
+                    else if (totalMinutes > 17 * 60 + 35) {
+                        currentSlot.setDate(currentSlot.getDate() + 1);
+                        currentSlot.setHours(7, 15, 0, 0);
+                    }
+                }
             }
         }
 
@@ -123,6 +162,22 @@ const updateSchedule = async (req, res) => {
 
         if (!schedule) {
             return res.status(404).json({ message: "Schedule not found" });
+        }
+
+        // Check for conflicts if time, room, or jury members changed
+        const newStartTime = startTime ? new Date(startTime) : schedule.startTime;
+        const newRoom = room || schedule.room;
+        const newPrincipal = principal || schedule.principal;
+        const newExaminator = examinator || schedule.examinator;
+        const newSupervisor = supervisor || schedule.supervisor;
+
+        const conflicts = await getConflicts(newStartTime, newRoom, newPrincipal, newExaminator, newSupervisor, req.params.id);
+
+        if (conflicts.room) {
+            return res.status(400).json({ message: `Room ${newRoom} is already occupied at this time.` });
+        }
+        if (conflicts.profs.length > 0) {
+            return res.status(400).json({ message: "One or more professors are already assigned to another jury at this time." });
         }
 
         // Update fields
@@ -219,4 +274,3 @@ const exportSchedules = async (req, res) => {
 };
 
 module.exports = { autoPlan, getSchedules, updateSchedule, deleteSchedule, exportSchedules };
-
