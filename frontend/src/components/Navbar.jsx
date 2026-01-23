@@ -4,6 +4,7 @@ import "./Navbar.css";
 
 const Navbar = () => {
   const token = localStorage.getItem("token");
+  const user = JSON.parse(localStorage.getItem("user")) || {};
   const navigate = useNavigate();
 
   const handleLogoClick = () => {
@@ -16,6 +17,7 @@ const Navbar = () => {
 
   const handleLogout = () => {
     localStorage.removeItem("token");
+    localStorage.removeItem("user");
     navigate("/login");
   };
 
@@ -38,12 +40,23 @@ const Navbar = () => {
             <li>
               <Link to="/planning">Planning</Link>
             </li>
+            {user.role === 'admin' && (
+              <>
+                <li>
+                  <Link to="/admin/users">Users</Link>
+                </li>
+                <li>
+                  <Link to="/admin/theses">All Theses</Link>
+                </li>
+              </>
+            )}
             <li>
               <button onClick={handleLogout} className="logout-button">
                 Logout
               </button>
             </li>
           </>
+
 
         ) : (
           <>

@@ -4,7 +4,8 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Theses from "./pages/Theses";
 import Planning from "./pages/Planning";
-
+import AdminUsers from "./pages/AdminUsers";
+import AdminTheses from "./pages/AdminTheses";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { Navigate } from "react-router-dom";
 import Navbar from "./components/Navbar";
@@ -41,6 +42,22 @@ function App() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/admin/users"
+            element={
+              <ProtectedRoute>
+                <AdminUsers />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/theses"
+            element={
+              <ProtectedRoute>
+                <AdminTheses />
+              </ProtectedRoute>
+            }
+          />
           <Route path="/login" element={<LoginRedirect />} />
           <Route path="/register" element={<RegisterRedirect />} />
         </Routes>
@@ -48,6 +65,7 @@ function App() {
     </Router>
   );
 }
+
 
 
 export default App;

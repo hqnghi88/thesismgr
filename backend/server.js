@@ -5,6 +5,8 @@ const dotenv = require("dotenv");               // Load .env variables
 const authRoutes = require("./routes/authRoutes");
 const thesisRoutes = require("./routes/thesisRoutes");
 const scheduleRoutes = require("./routes/scheduleRoutes");
+const importRoutes = require("./routes/importRoutes");
+
 
 dotenv.config();
 
@@ -21,6 +23,8 @@ app.get('/', (req, res) => {
 app.use('/api', authRoutes);
 app.use('/api', thesisRoutes);
 app.use('/api', scheduleRoutes);
+app.use('/api', importRoutes);
+
 
 // Connect to Mongoose and start server                             // process.env.MONGO_URI -> 
 mongoose.connect(process.env.MONGO_URI, {

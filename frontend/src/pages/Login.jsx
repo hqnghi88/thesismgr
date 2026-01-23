@@ -29,7 +29,9 @@ function Login() {
         alert("Login Successful!");
         // Save token to local Storage
         localStorage.setItem("token", data.token);
+        localStorage.setItem("user", JSON.stringify(data.user));
         navigate("/"); // redirect to dashboard
+
       } else {
         alert(data.message);
       }

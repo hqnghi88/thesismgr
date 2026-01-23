@@ -7,12 +7,13 @@ function Register() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [role, setRole] = useState("student");
   const navigate = useNavigate();
 
   // SETP 2: Handle form submission
   const handleSubmit = async (e) => {
     e.preventDefault(); // Prevent page reload;
-    console.log("Submitted:", { name, email, password });
+    console.log("Submitted:", { name, email, password, role });
 
     try {
       const res = await fetch(`${import.meta.env.VITE_API_URL}/api/register`, {
@@ -20,7 +21,7 @@ function Register() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ name, email, password }),
+        body: JSON.stringify({ name, email, password, role }),
       });
 
       const data = await res.json();
@@ -49,6 +50,7 @@ function Register() {
           placeholder="Name"
           value={name}
           onChange={(e) => setName(e.target.value)}
+          required
         />
 
         <input
@@ -56,6 +58,7 @@ function Register() {
           placeholder="Email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
+          required
         />
 
         <input
@@ -63,7 +66,20 @@ function Register() {
           placeholder="Password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
+          required
         />
+
+        <div style={{ margin: "10px 0", textAlign: "left" }}>
+          <label style={{ display: "block", marginBottom: "5px", fontSize: "0.9rem", color: "#666" }}>Register as:</label>
+          <select
+            value={role}
+            onChange={(e) => setRole(e.target.value)}
+            style={{ width: "100%", padding: "10px", borderRadius: "6px", border: "1px solid #ccc", background: "white" }}
+          >
+            <option value="student">Student</option>
+            <option value="professor">Professor / Supervisor</option>
+          </select>
+        </div>
 
         <button type="submit">Register</button>
 
@@ -72,6 +88,7 @@ function Register() {
         </p>
       </form>
     </div>
+
   );
 }
 

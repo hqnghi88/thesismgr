@@ -50,10 +50,11 @@ const loginUser = async (req, res) => {
 
     // Create JWT Token
     const token = jwt.sign(
-      { id: user._id },                 // Payload (data we include in the token)
-      process.env.JWT_SECRET,           // Secret key used to sign the token
-      { expiresIn: "1d" }                // token will expire in 1 day
+      { id: user._id, role: user.role }, // Payload
+      process.env.JWT_SECRET,           // Secret key 
+      { expiresIn: "1d" }                // expiry
     );
+
 
     // 3. If everything is okay
     res.status(200).json({
@@ -74,6 +75,65 @@ const loginUser = async (req, res) => {
   }
 };
 
+const getAllUsers = async (req, res) => {
+  try {
+    const users = await User.find().select('-password');
+    res.status(200).json(users);
+  } catch (error) {
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+const updateUserRole = async (req, res) => {
+  try {
+    const { role } = req.body;
+    if (!['student', 'professor', 'admin'].includes(role)) {
+      return res.status(400).json({ message: "Invalid role" });
+    }
+    const user = await User.findByIdAndUpdate(req.params.id, { role }, { new: true }).select('-password');
+    if (!user) return res.status(404).json({ message: "User not found" });
+    res.status(200).json(user);
+  } catch (error) {
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+const deleteUser = async (req, res) => {
+  try {
+    const user = await User.findByIdAndDelete(req.params.id);
+    if (!user) return res.status(404).json({ message: "User not found" });
+    res.status(200).json({ message: "User deleted successfully" });
+  } catch (error) {
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+const createUser = async (req, res) => {
+  try {
+    const { name, email, password, role } = req.body;
+    const existingUser = await User.findOne({ email });
+    if (existingUser) return res.status(400).json({ message: "User already exists" });
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const newUser = new User({ name, email, password: hashedPassword, role: role || 'student' });
+    await newUser.save();
+    res.status(201).json({ message: "User created successfully", user: { id: newUser._id, name, email, role: newUser.role } });
+  } catch (error) {
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+const updateUserAdmin = async (req, res) => {
+  try {
+    const { name, email, role } = req.body;
+    const user = await User.findByIdAndUpdate(req.params.id, { name, email, role }, { new: true }).select('-password');
+    if (!user) return res.status(404).json({ message: "User not found" });
+    res.status(200).json(user);
+  } catch (error) {
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
 const getProfessors = async (req, res) => {
   try {
     const professors = await User.find({ role: 'professor' }).select('name email');
@@ -83,5 +143,8 @@ const getProfessors = async (req, res) => {
   }
 };
 
-module.exports = { registerUser, loginUser, getProfessors };
+module.exports = { registerUser, loginUser, getProfessors, getAllUsers, updateUserRole, deleteUser, createUser, updateUserAdmin };
+
+
+
 

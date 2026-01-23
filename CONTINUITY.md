@@ -1,31 +1,32 @@
 # Ledger: thesis-mgr
 
-- Goal: Restructure the template into a Thesis CMS with automatic jury timeslot planning.
+- Goal: Restructure the template into a Thesis CMS with automatic jury timeslot planning and comprehensive Admin management.
 - Constraints/Assumptions:
     - Backend: Express/Mongoose.
     - Frontend: React/Vite.
-    - Features: Thesis tracking, Jury assignment, Auto-scheduling.
-- Key decisions:
-    - Replace Task model with Thesis, Jury, and Schedule models.
-    - Implement a scheduling algorithm for jury timeslots.
+    - Roles: Student, Professor, Admin.
     - Jury structure: Student, Supervisor, 1 Principal (Prof), 1 Examinator (Prof).
+- Key decisions:
+    - Implemented role-based access control (RBAC).
+    - Created Thesis and Schedule models with specific jury roles.
+    - Developed an auto-planning algorithm for defenses.
+    - Added Admin pages for user and thesis oversight.
 - State:
     - Done:
         - MongoDB/Docker/Backend/Frontend environment setup.
-        - Restructured models to support Thesis and specific Jury roles.
-        - Implemented auto-planning algorithm with role-based jury assignment.
-        - Restarted all services (Docker, Backend, Frontend).
+        - Full project restructuring into a Thesis CMS.
+        - Admin user management implemented.
+        - Thesis audit and assignment capabilities added.
+        - Excel Import feature implemented for bulk data entry.
+        - Auto-scheduling logic verified.
+
     - Now:
-        - Services are back up and healthy.
-
-
+        - Project fully functional and transition complete.
     - Next:
-        - Implementation of Thesis, Jury, and Schedule models.
-        - Update controllers to handle thesis management.
+        - Maintenance or further feature expansion as requested.
 - Open questions:
-    - What are the constraints for auto-planning? (e.g., Professor availability, room limits, specific days).
+    - None.
 - Working set:
-    - `backend/models/Thesis.js`
-    - `backend/models/Jury.js`
-    - `backend/models/Schedule.js`
-    - `backend/models/User.js`
+    - `backend/models/*.js`
+    - `backend/controllers/*.js`
+    - `frontend/src/pages/*.jsx`

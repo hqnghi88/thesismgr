@@ -71,4 +71,26 @@ const deleteThesis = async (req, res) => {
     }
 };
 
-module.exports = { createThesis, getTheses, updateThesis, deleteThesis };
+const getAllThesesAdmin = async (req, res) => {
+    try {
+        const theses = await Thesis.find().populate('student supervisor', 'name email');
+        res.status(200).json(theses);
+    } catch (error) {
+        console.error("Admin Get Theses Error:", error.message);
+        res.status(500).json({ message: "Server Error" });
+    }
+};
+
+const updateThesisAdmin = async (req, res) => {
+    try {
+        const updatedThesis = await Thesis.findByIdAndUpdate(req.params.id, req.body, { new: true }).populate('student supervisor', 'name email');
+        if (!updatedThesis) return res.status(404).json({ message: "Thesis not found" });
+        res.status(200).json(updatedThesis);
+    } catch (error) {
+        console.error("Admin Update Thesis Error:", error.message);
+        res.status(500).json({ message: "Server Error" });
+    }
+};
+
+module.exports = { createThesis, getTheses, updateThesis, deleteThesis, getAllThesesAdmin, updateThesisAdmin };
+
