@@ -69,6 +69,19 @@ const AdminTheses = () => {
         }
     };
 
+    const handleDeleteAll = async () => {
+        if (!window.confirm("Are you sure you want to delete ALL theses? This action cannot be undone.")) return;
+        try {
+            const res = await axios.delete(`${import.meta.env.VITE_API_URL}/api/admin/theses/all`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            alert(res.data.message);
+            fetchData();
+        } catch (err) {
+            alert(err.response?.data?.message || "Error deleting all theses");
+        }
+    };
+
     const getStatusVariant = (status) => {
         switch (status) {
             case 'submitted': return 'secondary';
@@ -89,7 +102,10 @@ const AdminTheses = () => {
             <Container>
                 <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4 gap-3">
                     <h2 className="mb-0 fw-bold">🎓 All Theses (Admin Console)</h2>
-                    <div>
+                    <div className="d-flex gap-2 flex-wrap">
+                        <Button variant="outline-danger" onClick={handleDeleteAll}>
+                            🗑️ Delete All Theses
+                        </Button>
                         <input
                             type="file"
                             accept=".xlsx, .xls"

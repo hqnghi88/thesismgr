@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { registerUser, loginUser, getProfessors, getAllUsers, updateUserRole, deleteUser, createUser, updateUserAdmin } = require("../controllers/authController");
+const { registerUser, loginUser, getProfessors, getAllUsers, updateUserRole, deleteUser, createUser, updateUserAdmin, deleteUsersByRole } = require("../controllers/authController");
 const authMiddleware = require("../middleware/authMiddleware");
 const adminMiddleware = require("../middleware/adminMiddleware");
 
@@ -18,6 +18,7 @@ router.post('/users', authMiddleware, adminMiddleware, createUser);
 router.put('/users/:id', authMiddleware, adminMiddleware, updateUserAdmin);
 router.put('/users/:id/role', authMiddleware, adminMiddleware, updateUserRole);
 router.delete('/users/:id', authMiddleware, adminMiddleware, deleteUser);
+router.delete('/users/role/:role', authMiddleware, adminMiddleware, deleteUsersByRole);
 
 
 router.get('/dashboard', authMiddleware, (req, res) => {

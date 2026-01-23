@@ -92,5 +92,18 @@ const updateThesisAdmin = async (req, res) => {
     }
 };
 
-module.exports = { createThesis, getTheses, updateThesis, deleteThesis, getAllThesesAdmin, updateThesisAdmin };
+const Schedule = require("../models/Schedule");
+
+const deleteAllTheses = async (req, res) => {
+    try {
+        await Schedule.deleteMany({}); // Crucial: clear schedules first
+        const result = await Thesis.deleteMany({});
+        res.status(200).json({ message: `Successfully deleted all schedules and ${result.deletedCount} theses` });
+    } catch (error) {
+        console.error("Admin Delete All Theses Error:", error.message);
+        res.status(500).json({ message: "Server Error" });
+    }
+};
+
+module.exports = { createThesis, getTheses, updateThesis, deleteThesis, getAllThesesAdmin, updateThesisAdmin, deleteAllTheses };
 

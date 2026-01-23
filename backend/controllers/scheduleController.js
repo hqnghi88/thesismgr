@@ -171,6 +171,17 @@ const updateSchedule = async (req, res) => {
         const newExaminator = examinator || schedule.examinator;
         const newSupervisor = supervisor || schedule.supervisor;
 
+        // Validate that all jury members are unique
+        const juryMembers = [
+            newPrincipal.toString(),
+            newExaminator.toString(),
+            newSupervisor.toString()
+        ];
+        const uniqueMembers = new Set(juryMembers);
+        if (uniqueMembers.size !== juryMembers.length) {
+            return res.status(400).json({ message: "All jury members (Principal, Examinator, Supervisor) must be different people." });
+        }
+
         const conflicts = await getConflicts(newStartTime, newRoom, newPrincipal, newExaminator, newSupervisor, req.params.id);
 
         if (conflicts.room) {
@@ -273,4 +284,16 @@ const exportSchedules = async (req, res) => {
     }
 };
 
-module.exports = { autoPlan, getSchedules, updateSchedule, deleteSchedule, exportSchedules };
+const deleteAllSchedules = async (req, res) => {
+    try {
+        const result = await Schedule.deleteMany({});
+        // Also update all theses status back to approved
+        await Thesis.updateMany({}, { status: 'approved' });
+        res.status(200).json({ message: `Successfully deleted ${result.deletedCount} schedules` });
+    } catch (error) {
+        console.error("Delete All Schedules Error:", error);
+        res.status(500).json({ message: "Server error" });
+    }
+};
+
+module.exports = { autoPlan, getSchedules, updateSchedule, deleteSchedule, exportSchedules, deleteAllSchedules };

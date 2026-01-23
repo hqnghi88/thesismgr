@@ -1,14 +1,14 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const multer = require('multer');
-const { importExcel } = require('../controllers/importController');
-const authMiddleware = require('../middleware/authMiddleware');
-const adminMiddleware = require('../middleware/adminMiddleware');
+const multer = require("multer");
+const { importUsersFromExcel } = require("../controllers/importController");
+const authMiddleware = require("../middleware/authMiddleware");
 
-// Configure multer for memory storage
+// Configure multer for file upload
 const storage = multer.memoryStorage();
-const upload = multer({ storage: storage });
+const upload = multer({ storage });
 
-router.post('/import-excel', authMiddleware, adminMiddleware, upload.single('file'), importExcel);
+// Import users from Excel
+router.post("/import-users", authMiddleware, upload.single('file'), importUsersFromExcel);
 
 module.exports = router;

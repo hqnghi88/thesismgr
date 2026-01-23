@@ -17,21 +17,31 @@
         - Full project restructuring into a Thesis CMS.
         - Admin user management implemented with full CRUD.
         - Thesis audit and assignment capabilities added with Delete support.
-        - Excel Import feature implemented for bulk data entry.
+        - Excel Import feature implemented for bulk data entry (Theses and Users).
         - Refined auto-planning logic to match `juries.xlsx` template (35-min slots, 07:15/13:30 shifts).
         - Excel Export feature to download schedules in template format.
         - Edit functionality added to thesis cards (students can edit their own theses).
         - Edit functionality added to schedule/planning cards (admins can modify jury, time, room).
         - Manual removal (Delete) of schedules verified.
+        - Implemented professor and room conflict detection for scheduling.
+        - Completely redesigned UI using Bootstrap for a professional look.
+        - Ensured full mobile responsiveness across all admin pages.
+        - Added Timetable view to the Planning page with quick inline editing (swap professors, shift time).
+        - Enforced jury member uniqueness (Principal, Examinator, Supervisor must be different).
+        - Added bulk delete feature for professors and students.
+        - Added bulk delete feature for all theses (automatically clears schedules too).
+        - Added bulk delete feature for all schedules (resets thesis statuses to approved).
 
     - Now:
         - All requested features implemented and verified.
 
     - Next:
-        - Maintenance or further feature expansion as requested.
+        - Maintenance or further feature expansion as requested by the user.
 - Open questions:
     - None.
 - Working set:
     - `backend/models/*.js`
     - `backend/controllers/*.js`
+    - `backend/routes/*.js`
     - `frontend/src/pages/*.jsx`
+    - `frontend/src/components/*.jsx`

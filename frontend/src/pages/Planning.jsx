@@ -1,13 +1,13 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
-import { Container, Row, Col, Card, Button, Modal, Form, Badge, ListGroup, Alert, ButtonGroup, Table } from "react-bootstrap";
+import { Container, Row, Col, Card, Button, Modal, Form, Badge, ListGroup, Alert, ButtonGroup, Table, Dropdown } from "react-bootstrap";
 
 const Planning = () => {
     const [schedules, setSchedules] = useState([]);
     const [loading, setLoading] = useState(false);
     const [editingSchedule, setEditingSchedule] = useState(null);
     const [professors, setProfessors] = useState([]);
-    const [viewMode, setViewMode] = useState('cards'); // 'cards' or 'timetable'
+    const [viewMode, setViewMode] = useState('timetable'); // Default to timetable
     const [editForm, setEditForm] = useState({
         principal: '',
         examinator: '',
@@ -85,6 +85,74 @@ const Planning = () => {
         }
     };
 
+    // Quick update functions for inline editing
+    const quickUpdateRoom = async (scheduleId, newRoom) => {
+        try {
+            const schedule = schedules.find(s => s._id === scheduleId);
+            await axios.put(`${import.meta.env.VITE_API_URL}/api/schedule/${scheduleId}`, {
+                room: newRoom,
+                principal: schedule.principal._id,
+                examinator: schedule.examinator._id,
+                supervisor: schedule.supervisor._id,
+                startTime: schedule.startTime,
+                endTime: schedule.endTime
+            }, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            fetchSchedules();
+        } catch (err) {
+            alert(err.response?.data?.message || "Error updating room");
+        }
+    };
+
+    const quickUpdateTime = async (scheduleId, timeShift) => {
+        try {
+            const schedule = schedules.find(s => s._id === scheduleId);
+            const currentStart = new Date(schedule.startTime);
+            const currentEnd = new Date(schedule.endTime);
+
+            // Shift by 35 minutes
+            currentStart.setMinutes(currentStart.getMinutes() + (timeShift * 35));
+            currentEnd.setMinutes(currentEnd.getMinutes() + (timeShift * 35));
+
+            await axios.put(`${import.meta.env.VITE_API_URL}/api/schedule/${scheduleId}`, {
+                startTime: currentStart.toISOString(),
+                endTime: currentEnd.toISOString(),
+                room: schedule.room,
+                principal: schedule.principal._id,
+                examinator: schedule.examinator._id,
+                supervisor: schedule.supervisor._id
+            }, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            fetchSchedules();
+        } catch (err) {
+            alert(err.response?.data?.message || "Error updating time");
+        }
+    };
+
+    const quickSwapProfessor = async (scheduleId, role, newProfId) => {
+        try {
+            const schedule = schedules.find(s => s._id === scheduleId);
+            const updates = {
+                principal: schedule.principal._id,
+                examinator: schedule.examinator._id,
+                supervisor: schedule.supervisor._id,
+                startTime: schedule.startTime,
+                endTime: schedule.endTime,
+                room: schedule.room
+            };
+            updates[role] = newProfId;
+
+            await axios.put(`${import.meta.env.VITE_API_URL}/api/schedule/${scheduleId}`, updates, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            fetchSchedules();
+        } catch (err) {
+            alert(err.response?.data?.message || "Error swapping professor");
+        }
+    };
+
     const handleDelete = async (id) => {
         if (!window.confirm("Are you sure you want to delete this schedule?")) return;
         try {
@@ -94,6 +162,19 @@ const Planning = () => {
             fetchSchedules();
         } catch (err) {
             alert("Error deleting schedule");
+        }
+    };
+
+    const handleDeleteAllSchedules = async () => {
+        if (!window.confirm("Are you sure you want to delete ALL schedules? This will reset all thesis statuses back to 'approved'.")) return;
+        try {
+            const res = await axios.delete(`${import.meta.env.VITE_API_URL}/api/schedule/all`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            alert(res.data.message);
+            fetchSchedules();
+        } catch (err) {
+            alert(err.response?.data?.message || "Error deleting all schedules");
         }
     };
 
@@ -152,6 +233,7 @@ const Planning = () => {
     };
 
     const { rooms, timeSlots, timetableData } = generateTimetable();
+    const availableRooms = ["Room 110/DI", "Room 111/DI"];
 
     return (
         <Container fluid className="py-4" style={{ marginTop: '70px', backgroundColor: '#f8f9fa', minHeight: '100vh' }}>
@@ -170,6 +252,9 @@ const Planning = () => {
                                         disabled={loading}
                                     >
                                         {loading ? "Planning..." : "🤖 Run Auto-Planning"}
+                                    </Button>
+                                    <Button variant="outline-danger" onClick={handleDeleteAllSchedules}>
+                                        🗑️ Delete All Schedules
                                     </Button>
                                     <Button variant="primary" onClick={handleExport}>
                                         📥 Export to Excel
@@ -360,7 +445,7 @@ const Planning = () => {
                     </Row>
                 )}
 
-                {/* Timetable View */}
+                {/* Timetable View with Quick Actions */}
                 {viewMode === 'timetable' && (
                     <Card className="border-0 shadow-sm">
                         <Card.Body className="p-0">
@@ -370,7 +455,7 @@ const Planning = () => {
                                         <tr>
                                             <th className="text-center" style={{ minWidth: '100px' }}>Time</th>
                                             {rooms.map(room => (
-                                                <th key={room} className="text-center" style={{ minWidth: '300px' }}>
+                                                <th key={room} className="text-center" style={{ minWidth: '350px' }}>
                                                     {room}
                                                 </th>
                                             ))}
@@ -391,18 +476,112 @@ const Planning = () => {
                                                                     <div className="fw-bold text-primary mb-1">
                                                                         {schedule.thesis?.title}
                                                                     </div>
-                                                                    <div className="text-muted" style={{ fontSize: '0.85rem' }}>
+                                                                    <div className="text-muted mb-2" style={{ fontSize: '0.85rem' }}>
                                                                         <div>👤 {schedule.student?.name}</div>
-                                                                        <div>👨‍🏫 {schedule.supervisor?.name}</div>
-                                                                        <div>🎯 {schedule.principal?.name}</div>
-                                                                        <div>🔍 {schedule.examinator?.name}</div>
+                                                                        <div className="d-flex align-items-center gap-1">
+                                                                            👨‍🏫
+                                                                            <Dropdown size="sm" className="d-inline">
+                                                                                <Dropdown.Toggle variant="link" className="p-0 text-decoration-none text-muted" style={{ fontSize: '0.85rem' }}>
+                                                                                    {schedule.supervisor?.name}
+                                                                                </Dropdown.Toggle>
+                                                                                <Dropdown.Menu>
+                                                                                    {professors.filter(prof =>
+                                                                                        prof._id !== schedule.principal?._id &&
+                                                                                        prof._id !== schedule.examinator?._id
+                                                                                    ).map(prof => (
+                                                                                        <Dropdown.Item
+                                                                                            key={prof._id}
+                                                                                            onClick={() => quickSwapProfessor(schedule._id, 'supervisor', prof._id)}
+                                                                                            active={prof._id === schedule.supervisor?._id}
+                                                                                        >
+                                                                                            {prof.name}
+                                                                                        </Dropdown.Item>
+                                                                                    ))}
+                                                                                </Dropdown.Menu>
+                                                                            </Dropdown>
+                                                                        </div>
+                                                                        <div className="d-flex align-items-center gap-1">
+                                                                            🎯
+                                                                            <Dropdown size="sm" className="d-inline">
+                                                                                <Dropdown.Toggle variant="link" className="p-0 text-decoration-none text-muted" style={{ fontSize: '0.85rem' }}>
+                                                                                    {schedule.principal?.name}
+                                                                                </Dropdown.Toggle>
+                                                                                <Dropdown.Menu>
+                                                                                    {professors.filter(prof =>
+                                                                                        prof._id !== schedule.supervisor?._id &&
+                                                                                        prof._id !== schedule.examinator?._id
+                                                                                    ).map(prof => (
+                                                                                        <Dropdown.Item
+                                                                                            key={prof._id}
+                                                                                            onClick={() => quickSwapProfessor(schedule._id, 'principal', prof._id)}
+                                                                                            active={prof._id === schedule.principal?._id}
+                                                                                        >
+                                                                                            {prof.name}
+                                                                                        </Dropdown.Item>
+                                                                                    ))}
+                                                                                </Dropdown.Menu>
+                                                                            </Dropdown>
+                                                                        </div>
+                                                                        <div className="d-flex align-items-center gap-1">
+                                                                            🔍
+                                                                            <Dropdown size="sm" className="d-inline">
+                                                                                <Dropdown.Toggle variant="link" className="p-0 text-decoration-none text-muted" style={{ fontSize: '0.85rem' }}>
+                                                                                    {schedule.examinator?.name}
+                                                                                </Dropdown.Toggle>
+                                                                                <Dropdown.Menu>
+                                                                                    {professors.filter(prof =>
+                                                                                        prof._id !== schedule.supervisor?._id &&
+                                                                                        prof._id !== schedule.principal?._id
+                                                                                    ).map(prof => (
+                                                                                        <Dropdown.Item
+                                                                                            key={prof._id}
+                                                                                            onClick={() => quickSwapProfessor(schedule._id, 'examinator', prof._id)}
+                                                                                            active={prof._id === schedule.examinator?._id}
+                                                                                        >
+                                                                                            {prof.name}
+                                                                                        </Dropdown.Item>
+                                                                                    ))}
+                                                                                </Dropdown.Menu>
+                                                                            </Dropdown>
+                                                                        </div>
                                                                     </div>
-                                                                    <div className="mt-2">
+                                                                    <div className="d-flex gap-1 flex-wrap">
+                                                                        <Dropdown size="sm">
+                                                                            <Dropdown.Toggle variant="outline-secondary" size="sm">
+                                                                                🏢
+                                                                            </Dropdown.Toggle>
+                                                                            <Dropdown.Menu>
+                                                                                {availableRooms.map(r => (
+                                                                                    <Dropdown.Item
+                                                                                        key={r}
+                                                                                        onClick={() => quickUpdateRoom(schedule._id, r)}
+                                                                                        active={r === schedule.room}
+                                                                                    >
+                                                                                        {r}
+                                                                                    </Dropdown.Item>
+                                                                                ))}
+                                                                            </Dropdown.Menu>
+                                                                        </Dropdown>
+                                                                        <Button
+                                                                            variant="outline-info"
+                                                                            size="sm"
+                                                                            onClick={() => quickUpdateTime(schedule._id, -1)}
+                                                                            title="Move earlier"
+                                                                        >
+                                                                            ⬆️
+                                                                        </Button>
+                                                                        <Button
+                                                                            variant="outline-info"
+                                                                            size="sm"
+                                                                            onClick={() => quickUpdateTime(schedule._id, 1)}
+                                                                            title="Move later"
+                                                                        >
+                                                                            ⬇️
+                                                                        </Button>
                                                                         <Button
                                                                             variant="outline-primary"
                                                                             size="sm"
                                                                             onClick={() => handleEdit(schedule)}
-                                                                            className="me-1"
                                                                         >
                                                                             ✏️
                                                                         </Button>

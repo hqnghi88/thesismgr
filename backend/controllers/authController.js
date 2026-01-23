@@ -143,7 +143,20 @@ const getProfessors = async (req, res) => {
   }
 };
 
-module.exports = { registerUser, loginUser, getProfessors, getAllUsers, updateUserRole, deleteUser, createUser, updateUserAdmin };
+const deleteUsersByRole = async (req, res) => {
+  try {
+    const { role } = req.params;
+    if (!['student', 'professor'].includes(role)) {
+      return res.status(400).json({ message: "Invalid role for bulk delete" });
+    }
+    const result = await User.deleteMany({ role });
+    res.status(200).json({ message: `Successfully deleted ${result.deletedCount} ${role}s` });
+  } catch (error) {
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+module.exports = { registerUser, loginUser, getProfessors, getAllUsers, updateUserRole, deleteUser, createUser, updateUserAdmin, deleteUsersByRole };
 
 
 

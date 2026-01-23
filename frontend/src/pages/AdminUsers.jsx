@@ -8,6 +8,7 @@ const AdminUsers = () => {
     const [showForm, setShowForm] = useState(false);
     const [form, setForm] = useState({ name: "", email: "", password: "", role: "student" });
     const [editId, setEditId] = useState(null);
+    const [importing, setImporting] = useState(false);
 
     const token = localStorage.getItem("token");
 
@@ -40,6 +41,44 @@ const AdminUsers = () => {
             fetchUsers();
         } catch (err) {
             alert(err.response?.data?.message || "Error saving user");
+        }
+    };
+
+    const handleImport = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        setImporting(true);
+        try {
+            const res = await axios.post(`${import.meta.env.VITE_API_URL}/api/import-users`, formData, {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'multipart/form-data'
+                },
+            });
+            alert(`Import successful!\nCreated: ${res.data.created}\nUpdated: ${res.data.updated}\nSkipped: ${res.data.skipped}`);
+            fetchUsers();
+        } catch (err) {
+            alert(err.response?.data?.message || "Import failed");
+        } finally {
+            setImporting(false);
+            e.target.value = ''; // Reset file input
+        }
+    };
+
+    const handleDeleteByRole = async (role) => {
+        if (!window.confirm(`Are you sure you want to delete ALL ${role}s? This action cannot be undone.`)) return;
+        try {
+            const res = await axios.delete(`${import.meta.env.VITE_API_URL}/api/users/role/${role}`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            alert(res.data.message);
+            fetchUsers();
+        } catch (err) {
+            alert(err.response?.data?.message || `Error deleting ${role}s`);
         }
     };
 
@@ -84,17 +123,55 @@ const AdminUsers = () => {
             <Container>
                 <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4 gap-3">
                     <h2 className="mb-0 fw-bold">👥 User & Staff Management</h2>
-                    <Button
-                        variant="primary"
-                        onClick={() => {
-                            setShowForm(!showForm);
-                            setEditId(null);
-                            setForm({ name: "", email: "", password: "", role: "student" });
-                        }}
-                    >
-                        {showForm ? "Cancel" : "➕ Add New User"}
-                    </Button>
+                    <div className="d-flex gap-2 flex-wrap">
+                        <Button variant="outline-danger" onClick={() => handleDeleteByRole('professor')}>
+                            🗑️ Delete All Professors
+                        </Button>
+                        <Button variant="outline-danger" onClick={() => handleDeleteByRole('student')}>
+                            🗑️ Delete All Students
+                        </Button>
+                        <input
+                            type="file"
+                            accept=".xlsx, .xls"
+                            style={{ display: 'none' }}
+                            id="user-excel-upload"
+                            onChange={handleImport}
+                            disabled={importing}
+                        />
+                        <label htmlFor="user-excel-upload" className="mb-0">
+                            <Button
+                                as="span"
+                                variant="success"
+                                disabled={importing}
+                                style={{ cursor: importing ? 'not-allowed' : 'pointer' }}
+                            >
+                                {importing ? "Importing..." : "📥 Import from Excel"}
+                            </Button>
+                        </label>
+                        <Button
+                            variant="primary"
+                            onClick={() => {
+                                setShowForm(!showForm);
+                                setEditId(null);
+                                setForm({ name: "", email: "", password: "", role: "student" });
+                            }}
+                        >
+                            {showForm ? "Cancel" : "➕ Add New User"}
+                        </Button>
+                    </div>
                 </div>
+
+                {/* Import Info */}
+                <Alert variant="info" className="mb-4">
+                    <Alert.Heading className="h6">📥 Excel Import Format</Alert.Heading>
+                    <small>
+                        Your Excel file should have columns: <strong>Title</strong>, <strong>Name</strong>, <strong>Email</strong>, Code, Short.
+                        <br />
+                        All imported users will be created as <Badge bg="primary">Professors</Badge> with default password: <code>password123</code>
+                        <br />
+                        Existing users (matched by email) will be updated with new names.
+                    </small>
+                </Alert>
 
                 {/* Form Card */}
                 <Collapse in={showForm}>
