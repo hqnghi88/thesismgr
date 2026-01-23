@@ -2,7 +2,9 @@ import React from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
-import Dashboard from "./pages/Dashboard";
+import Theses from "./pages/Theses";
+import Planning from "./pages/Planning";
+
 import ProtectedRoute from "./components/ProtectedRoute";
 import { Navigate } from "react-router-dom";
 import Navbar from "./components/Navbar";
@@ -27,8 +29,15 @@ function App() {
             path="/"
             element={
               <ProtectedRoute>
-                {" "}
-                <Dashboard />{" "}
+                <Theses />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/planning"
+            element={
+              <ProtectedRoute>
+                <Planning />
               </ProtectedRoute>
             }
           />
@@ -39,5 +48,6 @@ function App() {
     </Router>
   );
 }
+
 
 export default App;

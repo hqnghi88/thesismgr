@@ -1,20 +1,31 @@
-# Ledger: taskzen-project
+# Ledger: thesis-mgr
 
-- Goal: Start both backend and frontend services.
+- Goal: Restructure the template into a Thesis CMS with automatic jury timeslot planning.
 - Constraints/Assumptions:
-    - Backend uses Node.js/Express and Mongoose (needs MongoDB).
-    - Frontend uses Vite.
-    - No `.env` files visible in `taskzen-backend` or `taskzen-frontend`.
+    - Backend: Express/Mongoose.
+    - Frontend: React/Vite.
+    - Features: Thesis tracking, Jury assignment, Auto-scheduling.
 - Key decisions:
-    - Use `npm start` for backend.
-    - Use `npm run dev` for frontend.
+    - Replace Task model with Thesis, Jury, and Schedule models.
+    - Implement a scheduling algorithm for jury timeslots.
+    - Jury structure: Student, Supervisor, 1 Principal (Prof), 1 Examinator (Prof).
 - State:
-    - Done: Project exploration.
-    - Now: Installing dependencies in both backend and frontend.
-    - Next: Create .env files if needed and start services.
+    - Done:
+        - MongoDB/Docker/Backend/Frontend environment setup.
+        - Restructured models to support Thesis and specific Jury roles.
+        - Implemented auto-planning algorithm with role-based jury assignment.
+        - Restarted all services (Docker, Backend, Frontend).
+    - Now:
+        - Services are back up and healthy.
+
+
+    - Next:
+        - Implementation of Thesis, Jury, and Schedule models.
+        - Update controllers to handle thesis management.
 - Open questions:
-    - Is there a MongoDB instance running or a `MONGO_URI` available?
+    - What are the constraints for auto-planning? (e.g., Professor availability, room limits, specific days).
 - Working set:
-    - `taskzen-backend/server.js`
-    - `taskzen-backend/package.json`
-    - `taskzen-frontend/package.json`
+    - `backend/models/Thesis.js`
+    - `backend/models/Jury.js`
+    - `backend/models/Schedule.js`
+    - `backend/models/User.js`

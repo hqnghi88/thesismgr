@@ -4,7 +4,7 @@ const jwt = require("jsonwebtoken");
 
 const registerUser = async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password, role } = req.body;
 
     const existingUser = await User.findOne({ email });
     if (existingUser) {
@@ -16,8 +16,9 @@ const registerUser = async (req, res) => {
     console.log("Stored Hashed PW:", hashedPassword);
 
     // Create and save new user
-    const newUser = new User({ name, email, password: hashedPassword });
+    const newUser = new User({ name, email, password: hashedPassword, role: role || 'student' });
     await newUser.save();
+
 
     res.status(201).json({ message: "User registered successfully" });
   } catch (error) {
@@ -49,20 +50,22 @@ const loginUser = async (req, res) => {
 
     // Create JWT Token
     const token = jwt.sign(
-        { id: user._id },                 // Payload (data we include in the token)
-        process.env.JWT_SECRET,           // Secret key used to sign the token
-        {expiresIn: "1d"}                // token will expire in 1 day
+      { id: user._id },                 // Payload (data we include in the token)
+      process.env.JWT_SECRET,           // Secret key used to sign the token
+      { expiresIn: "1d" }                // token will expire in 1 day
     );
 
     // 3. If everything is okay
-    res.status(200).json({ 
-        message: "Login successful",
-        token,                              // this allows the frontend to save the token (in local storage or cookies) 
-        user: {                             // use the token to acces protected routes like /api/tasks, /api/dashboard
-            id: user._id,
-            name: user.name,
-            email: user.email
-        }
+    res.status(200).json({
+      message: "Login successful",
+      token,                              // this allows the frontend to save the token (in local storage or cookies) 
+      user: {                             // use the token to acces protected routes like /api/tasks, /api/dashboard
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role
+      }
+
     });
 
   } catch (error) {
@@ -71,4 +74,14 @@ const loginUser = async (req, res) => {
   }
 };
 
-module.exports = { registerUser, loginUser };
+const getProfessors = async (req, res) => {
+  try {
+    const professors = await User.find({ role: 'professor' }).select('name email');
+    res.status(200).json(professors);
+  } catch (error) {
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+module.exports = { registerUser, loginUser, getProfessors };
+

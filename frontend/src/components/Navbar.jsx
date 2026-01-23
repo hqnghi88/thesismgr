@@ -26,14 +26,17 @@ const Navbar = () => {
         onClick={handleLogoClick}
         style={{ cursor: "pointer", fontWeight: "bold", fontSize: "1.3rem" }}
       >
-        📋 TaskZen
+        🎓 ThesisMgr
       </div>
 
       <ul className="navbar-links">
         {token ? (
           <>
             <li>
-              <Link to="/">Dashboard</Link>
+              <Link to="/">Theses</Link>
+            </li>
+            <li>
+              <Link to="/planning">Planning</Link>
             </li>
             <li>
               <button onClick={handleLogout} className="logout-button">
@@ -41,6 +44,7 @@ const Navbar = () => {
               </button>
             </li>
           </>
+
         ) : (
           <>
             <li>
