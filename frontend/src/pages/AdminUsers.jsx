@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { Container, Row, Col, Card, Button, Form, Badge, Table, Alert, Collapse } from "react-bootstrap";
+import { useNotification } from "../context/NotificationContext";
 
 const AdminUsers = () => {
+    const { notify, confirm } = useNotification();
     const [users, setUsers] = useState([]);
     const [roleFilter, setRoleFilter] = useState("all");
     const [showForm, setShowForm] = useState(false);
@@ -40,7 +42,7 @@ const AdminUsers = () => {
             setShowForm(false);
             fetchUsers();
         } catch (err) {
-            alert(err.response?.data?.message || "Error saving user");
+            notify(err.response?.data?.message || "Error saving user");
         }
     };
 
@@ -59,10 +61,10 @@ const AdminUsers = () => {
                     'Content-Type': 'multipart/form-data'
                 },
             });
-            alert(`Import successful!\nCreated: ${res.data.created}\nUpdated: ${res.data.updated}\nSkipped: ${res.data.skipped}`);
+            notify(`Import successful!\nCreated: ${res.data.created}\nUpdated: ${res.data.updated}\nSkipped: ${res.data.skipped}`);
             fetchUsers();
         } catch (err) {
-            alert(err.response?.data?.message || "Import failed");
+            notify(err.response?.data?.message || "Import failed");
         } finally {
             setImporting(false);
             e.target.value = ''; // Reset file input
@@ -70,15 +72,15 @@ const AdminUsers = () => {
     };
 
     const handleDeleteByRole = async (role) => {
-        if (!window.confirm(`Are you sure you want to delete ALL ${role}s? This action cannot be undone.`)) return;
+        if (!(await confirm(`Are you sure you want to delete ALL ${role}s? This action cannot be undone.`))) return;
         try {
             const res = await axios.delete(`${import.meta.env.VITE_API_URL}/api/users/role/${role}`, {
                 headers: { Authorization: `Bearer ${token}` },
             });
-            alert(res.data.message);
+            notify(res.data.message);
             fetchUsers();
         } catch (err) {
-            alert(err.response?.data?.message || `Error deleting ${role}s`);
+            notify(err.response?.data?.message || `Error deleting ${role}s`);
         }
     };
 
@@ -90,14 +92,14 @@ const AdminUsers = () => {
     };
 
     const handleDelete = async (userId) => {
-        if (!window.confirm("Are you sure you want to delete this user?")) return;
+        if (!(await confirm("Are you sure you want to delete this user?"))) return;
         try {
             await axios.delete(`${import.meta.env.VITE_API_URL}/api/users/${userId}`, {
                 headers: { Authorization: `Bearer ${token}` },
             });
             fetchUsers();
         } catch (err) {
-            alert("Error deleting user");
+            notify("Error deleting user");
         }
     };
 

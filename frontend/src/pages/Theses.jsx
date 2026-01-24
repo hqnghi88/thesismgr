@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { Container, Row, Col, Card, Form, Button, Badge, Alert } from "react-bootstrap";
+import { useNotification } from "../context/NotificationContext";
 
 const Theses = () => {
+    const { notify, confirm } = useNotification();
     const [theses, setTheses] = useState([]);
     const [form, setForm] = useState({ title: "", abstract: "", supervisor: "" });
     const [editingId, setEditingId] = useState(null);
@@ -72,14 +74,14 @@ const Theses = () => {
     };
 
     const handleDelete = async (thesisId) => {
-        if (!window.confirm("Are you sure you want to delete this thesis?")) return;
+        if (!(await confirm("Are you sure you want to delete this thesis?"))) return;
         try {
             await axios.delete(`${import.meta.env.VITE_API_URL}/api/theses/${thesisId}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             fetchTheses();
         } catch (err) {
-            alert("Error deleting thesis");
+            notify("Error deleting thesis");
         }
     };
 

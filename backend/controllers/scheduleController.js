@@ -79,7 +79,9 @@ const autoPlan = async (req, res) => {
         const sortedSIds = Object.keys(supervisorGroups).sort((a, b) => supervisorGroups[b].length - supervisorGroups[a].length);
 
         // 4. Constants
-        const rooms = ["Room 110/DI", "Room 111/DI", "Room 112/DI", "Room 113/DI"];
+        const { roomCount } = req.body;
+        const defaultRooms = ["Room 110/DI", "Room 111/DI", "Room 112/DI", "Room 113/DI"];
+        const rooms = roomCount ? defaultRooms.slice(0, parseInt(roomCount)) : defaultRooms;
         const morningSlots = ["07:15", "07:50", "08:25", "09:00", "09:35", "10:10"];
         const afternoonSlots = ["13:30", "14:05", "14:40", "15:15", "15:50", "16:25"];
 

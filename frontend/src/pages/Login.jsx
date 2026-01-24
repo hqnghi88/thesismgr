@@ -2,8 +2,10 @@ import React from "react";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import "./Auth.css";
+import { useNotification } from "../context/NotificationContext";
 
 function Login() {
+  const { notify } = useNotification();
   const [formData, setFormData] = useState({ email: "", password: "" });
   const navigate = useNavigate(); // optional redirect after login
 
@@ -26,18 +28,18 @@ function Login() {
       const data = await res.json();
 
       if (res.ok) {
-        alert("Login Successful!");
+        // notify("Login Successful!"); // Usually silent or brief toast is better, but following requirement
         // Save token to local Storage
         localStorage.setItem("token", data.token);
         localStorage.setItem("user", JSON.stringify(data.user));
         navigate("/"); // redirect to dashboard
 
       } else {
-        alert(data.message);
+        notify(data.message);
       }
     } catch (err) {
       console.error(err);
-      alert("Something went wrong");
+      notify("Something went wrong");
     }
   };
 

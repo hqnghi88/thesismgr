@@ -1,8 +1,10 @@
 import { useState } from "react"; // importing Hook: useState
 import { Link, useNavigate } from "react-router-dom"; // Hooks are special functions that let you use React features inside functional components.
 import "./Auth.css";
+import { useNotification } from "../context/NotificationContext";
 
 function Register() {
+  const { notify } = useNotification();
   // STEP 1: Create state variables;
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -28,15 +30,15 @@ function Register() {
 
       if (res.ok) {
         console.log("User Registered:", data);
-        alert("Registration Successfull!");
+        notify("Registration Successfull!");
         navigate("/login");
       } else {
         console.error("Registeration error:", data.message);
-        alert("Error:" + data.message);
+        notify("Error:" + data.message);
       }
     } catch (err) {
       console.error("Request failed:", err);
-      alert("Something went wrong");
+      notify("Something went wrong");
     }
   };
 

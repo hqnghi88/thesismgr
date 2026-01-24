@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { Container, Row, Col, Card, Button, Form, Badge, Alert } from "react-bootstrap";
+import { useNotification } from "../context/NotificationContext";
 
 const AdminTheses = () => {
+    const { notify, confirm } = useNotification();
     const [theses, setTheses] = useState([]);
     const [professors, setProfessors] = useState([]);
     const [importing, setImporting] = useState(false);
@@ -36,10 +38,10 @@ const AdminTheses = () => {
                     'Content-Type': 'multipart/form-data'
                 },
             });
-            alert(res.data.message + ": " + res.data.count + " records created.");
+            notify(res.data.message + ": " + res.data.count + " records created.");
             fetchData();
         } catch (err) {
-            alert(err.response?.data?.message || "Import failed");
+            notify(err.response?.data?.message || "Import failed");
         } finally {
             setImporting(false);
         }
@@ -53,32 +55,32 @@ const AdminTheses = () => {
             );
             fetchData();
         } catch (err) {
-            alert("Error updating thesis");
+            notify("Error updating thesis");
         }
     };
 
     const handleDelete = async (thesisId) => {
-        if (!window.confirm("Are you sure you want to delete this thesis?")) return;
+        if (!(await confirm("Are you sure you want to delete this thesis?"))) return;
         try {
             await axios.delete(`${import.meta.env.VITE_API_URL}/api/theses/${thesisId}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             fetchData();
         } catch (err) {
-            alert("Error deleting thesis");
+            notify("Error deleting thesis");
         }
     };
 
     const handleDeleteAll = async () => {
-        if (!window.confirm("Are you sure you want to delete ALL theses? This action cannot be undone.")) return;
+        if (!(await confirm("Are you sure you want to delete ALL theses? This action cannot be undone."))) return;
         try {
             const res = await axios.delete(`${import.meta.env.VITE_API_URL}/api/admin/theses/all`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            alert(res.data.message);
+            notify(res.data.message);
             fetchData();
         } catch (err) {
-            alert(err.response?.data?.message || "Error deleting all theses");
+            notify(err.response?.data?.message || "Error deleting all theses");
         }
     };
 

@@ -20,6 +20,7 @@
         - Admin user management implemented with full CRUD.
         - Thesis audit and assignment capabilities added with Delete support.
         - Excel Import feature implemented for bulk data entry (Theses and Users).
+        - Enabled configurable auto-planning (e.g. room count selection before running).
         - Refined auto-planning logic to match `juries.xlsx` template (35-min slots, 07:15/13:30 shifts).
         - Excel Export feature to download schedules in template format.
         - Implemented exact-layout DOCX (Word) export with Landscape orientation, absolute column widths, and proper header formatting.
@@ -36,6 +37,7 @@
         - Added Timetable view to the Planning page with quick inline editing (swap professors, shift time, change room).
         - Enabled quick professor role swapping (Principal, Examinator) directly in List View and Timetable.
         - Made Supervisor role read-only in planning views to maintain data integrity.
+        - Implemented a global Notification Modal system to replace native bank alerts/confirms.
         - Enforced jury member uniqueness (Principal, Examinator, Supervisor must be different).
         - Added bulk delete feature for professors and students.
         - Added bulk delete feature for all theses (automatically clears schedules too).

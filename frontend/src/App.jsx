@@ -10,6 +10,7 @@ import AdminTheses from "./pages/AdminTheses";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { Navigate } from "react-router-dom";
 import Navbar from "./components/Navbar";
+import { NotificationProvider } from "./context/NotificationContext";
 
 const LoginRedirect = () => {
   const token = localStorage.getItem("token");
@@ -24,53 +25,55 @@ const RegisterRedirect = () => {
 function App() {
   return (
     <Router>
-      <Navbar />
-      <div style={{ paddingTop: "70px" }}>
-        <Routes>
-          <Route
-            path="/"
-            element={
-              <ProtectedRoute>
-                <Dashboard />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/theses"
-            element={
-              <ProtectedRoute>
-                <Theses />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/planning"
-            element={
-              <ProtectedRoute>
-                <Planning />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/admin/users"
-            element={
-              <ProtectedRoute>
-                <AdminUsers />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/admin/theses"
-            element={
-              <ProtectedRoute>
-                <AdminTheses />
-              </ProtectedRoute>
-            }
-          />
-          <Route path="/login" element={<LoginRedirect />} />
-          <Route path="/register" element={<RegisterRedirect />} />
-        </Routes>
-      </div>
+      <NotificationProvider>
+        <Navbar />
+        <div style={{ paddingTop: "70px" }}>
+          <Routes>
+            <Route
+              path="/"
+              element={
+                <ProtectedRoute>
+                  <Dashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/theses"
+              element={
+                <ProtectedRoute>
+                  <Theses />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/planning"
+              element={
+                <ProtectedRoute>
+                  <Planning />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/users"
+              element={
+                <ProtectedRoute>
+                  <AdminUsers />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/theses"
+              element={
+                <ProtectedRoute>
+                  <AdminTheses />
+                </ProtectedRoute>
+              }
+            />
+            <Route path="/login" element={<LoginRedirect />} />
+            <Route path="/register" element={<RegisterRedirect />} />
+          </Routes>
+        </div>
+      </NotificationProvider>
     </Router>
   );
 }

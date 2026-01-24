@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { Container, Row, Col, Card, Button, Modal, Form, Badge, ListGroup, Alert, ButtonGroup, Table, Dropdown } from "react-bootstrap";
+import { useNotification } from "../context/NotificationContext";
 
 const Planning = () => {
+    const { notify, confirm } = useNotification();
     const [schedules, setSchedules] = useState([]);
     const [loading, setLoading] = useState(false);
     const [editingSchedule, setEditingSchedule] = useState(null);
@@ -17,6 +19,10 @@ const Planning = () => {
         room: ''
     });
     const [error, setError] = useState('');
+    const [showAutoPlanModal, setShowAutoPlanModal] = useState(false);
+    const [autoPlanParams, setAutoPlanParams] = useState({
+        roomCount: 4
+    });
     const token = localStorage.getItem("token");
 
     const fetchSchedules = async () => {
@@ -100,7 +106,7 @@ const Planning = () => {
             });
             fetchSchedules();
         } catch (err) {
-            alert(err.response?.data?.message || "Error updating room");
+            notify(err.response?.data?.message || "Error updating room");
         }
     };
 
@@ -125,7 +131,7 @@ const Planning = () => {
             });
             fetchSchedules();
         } catch (err) {
-            alert(err.response?.data?.message || "Error updating time");
+            notify(err.response?.data?.message || "Error updating time");
         }
     };
 
@@ -147,45 +153,46 @@ const Planning = () => {
             });
             fetchSchedules();
         } catch (err) {
-            alert(err.response?.data?.message || "Error swapping professor");
+            notify(err.response?.data?.message || "Error swapping professor");
         }
     };
 
     const handleDelete = async (id) => {
-        if (!window.confirm("Are you sure you want to delete this schedule?")) return;
+        if (!(await confirm("Are you sure you want to delete this schedule?"))) return;
         try {
             await axios.delete(`${import.meta.env.VITE_API_URL}/api/schedule/${id}`, {
                 headers: { Authorization: `Bearer ${token}` },
             });
             fetchSchedules();
         } catch (err) {
-            alert("Error deleting schedule");
+            notify("Error deleting schedule");
         }
     };
 
     const handleDeleteAllSchedules = async () => {
-        if (!window.confirm("Are you sure you want to delete ALL schedules? This will reset all thesis statuses back to 'approved'.")) return;
+        if (!(await confirm("Are you sure you want to delete ALL schedules? This will reset all thesis statuses back to 'approved'."))) return;
         try {
             const res = await axios.delete(`${import.meta.env.VITE_API_URL}/api/schedule/all`, {
                 headers: { Authorization: `Bearer ${token}` },
             });
-            alert(res.data.message);
+            notify(res.data.message);
             fetchSchedules();
         } catch (err) {
-            alert(err.response?.data?.message || "Error deleting all schedules");
+            notify(err.response?.data?.message || "Error deleting all schedules");
         }
     };
 
     const handleAutoPlan = async () => {
         setLoading(true);
+        setShowAutoPlanModal(false);
         try {
-            const res = await axios.post(`${import.meta.env.VITE_API_URL}/api/schedule/auto-plan`, {}, {
+            const res = await axios.post(`${import.meta.env.VITE_API_URL}/api/schedule/auto-plan`, autoPlanParams, {
                 headers: { Authorization: `Bearer ${token}` },
             });
-            alert(`${res.data.message}\n- Newly Scheduled: ${res.data.scheduled}\n- Fixed/Updated: ${res.data.fixed}`);
+            notify(`${res.data.message}\n- Scheduled: ${res.data.scheduled}`);
             fetchSchedules();
         } catch (err) {
-            alert(err.response?.data?.message || "Error during planning");
+            notify(err.response?.data?.message || "Error during planning");
         } finally {
             setLoading(false);
         }
@@ -206,7 +213,7 @@ const Planning = () => {
             link.click();
             link.remove();
         } catch (err) {
-            alert("Error exporting Excel");
+            notify("Error exporting Excel");
         }
     };
 
@@ -225,7 +232,7 @@ const Planning = () => {
             link.click();
             link.remove();
         } catch (err) {
-            alert("Error exporting Word document");
+            notify("Error exporting Word document");
         }
     };
 
@@ -305,12 +312,42 @@ const Planning = () => {
 
                 <Card className="border-0 shadow-sm mb-4">
                     <Card.Body className="d-flex gap-2 flex-wrap">
-                        <Button variant="success" onClick={handleAutoPlan} disabled={loading}>{loading ? "Planning..." : "🤖 Run Auto-Planning"}</Button>
+                        <Button variant="success" onClick={() => setShowAutoPlanModal(true)} disabled={loading}>
+                            {loading ? "Planning..." : "🤖 Run Auto-Planning"}
+                        </Button>
                         <Button variant="outline-danger" onClick={handleDeleteAllSchedules}>🗑️ Clear All</Button>
                         <Button variant="primary" onClick={handleExport}>📥 Export Excel</Button>
                         <Button variant="info" className="text-white" onClick={handleExportDocx}>📝 Export Word</Button>
                     </Card.Body>
                 </Card>
+
+                {/* AutoPlan Config Modal */}
+                <Modal show={showAutoPlanModal} onHide={() => setShowAutoPlanModal(false)} centered>
+                    <Modal.Header closeButton>
+                        <Modal.Title>🤖 Auto-Planning Configuration</Modal.Title>
+                    </Modal.Header>
+                    <Modal.Body>
+                        <Form.Group className="mb-3">
+                            <Form.Label className="fw-semibold">Number of Rooms to Use</Form.Label>
+                            <Form.Select
+                                value={autoPlanParams.roomCount}
+                                onChange={(e) => setAutoPlanParams({ ...autoPlanParams, roomCount: parseInt(e.target.value) })}
+                            >
+                                <option value="1">1 Room (110/DI)</option>
+                                <option value="2">2 Rooms (110, 111)</option>
+                                <option value="3">3 Rooms (110, 111, 112)</option>
+                                <option value="4">4 Rooms (All Rooms)</option>
+                            </Form.Select>
+                            <Form.Text className="text-muted">
+                                Limiting rooms will spread the defense schedule across more days.
+                            </Form.Text>
+                        </Form.Group>
+                    </Modal.Body>
+                    <Modal.Footer>
+                        <Button variant="secondary" onClick={() => setShowAutoPlanModal(false)}>Cancel</Button>
+                        <Button variant="success" onClick={handleAutoPlan}>Start Planning</Button>
+                    </Modal.Footer>
+                </Modal>
 
                 <Modal show={editingSchedule !== null} onHide={handleCancelEdit} size="lg">
                     <Modal.Header closeButton><Modal.Title>Edit Schedule</Modal.Title></Modal.Header>
