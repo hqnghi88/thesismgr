@@ -353,9 +353,28 @@ const Planning = () => {
                                         </div>
                                         <ListGroup variant="flush" className="small mb-3">
                                             <ListGroup.Item className="px-0 py-1 border-0">👤 <strong>Student:</strong> {schedule.student?.name}</ListGroup.Item>
-                                            <ListGroup.Item className="px-0 py-1 border-0">👨‍🏫 <strong>SV:</strong> {schedule.supervisor?.name}</ListGroup.Item>
-                                            <ListGroup.Item className="px-0 py-1 border-0">🎯 <strong>PR:</strong> {schedule.principal?.name}</ListGroup.Item>
-                                            <ListGroup.Item className="px-0 py-1 border-0">🔍 <strong>EX:</strong> {schedule.examinator?.name}</ListGroup.Item>
+                                            <ListGroup.Item className="px-0 py-1 border-0 d-flex align-items-center gap-1">
+                                                👨‍🏫 <strong>SV:</strong>
+                                                <span className="text-dark fw-normal">{schedule.supervisor?.name || "None"}</span>
+                                            </ListGroup.Item>
+                                            <ListGroup.Item className="px-0 py-1 border-0 d-flex align-items-center gap-1">
+                                                🎯 <strong>PR:</strong>
+                                                <Dropdown size="sm">
+                                                    <Dropdown.Toggle variant="link" className="p-0 text-decoration-none text-dark fw-normal">{schedule.principal?.name || "None"}</Dropdown.Toggle>
+                                                    <Dropdown.Menu style={{ maxHeight: '250px', overflowY: 'auto' }}>
+                                                        {professors.map(p => <Dropdown.Item key={p._id} onClick={() => quickSwapProfessor(schedule._id, 'principal', p._id)} active={p._id === schedule.principal?._id}>{p.name}</Dropdown.Item>)}
+                                                    </Dropdown.Menu>
+                                                </Dropdown>
+                                            </ListGroup.Item>
+                                            <ListGroup.Item className="px-0 py-1 border-0 d-flex align-items-center gap-1">
+                                                🔍 <strong>EX:</strong>
+                                                <Dropdown size="sm">
+                                                    <Dropdown.Toggle variant="link" className="p-0 text-decoration-none text-dark fw-normal">{schedule.examinator?.name || "None"}</Dropdown.Toggle>
+                                                    <Dropdown.Menu style={{ maxHeight: '250px', overflowY: 'auto' }}>
+                                                        {professors.map(p => <Dropdown.Item key={p._id} onClick={() => quickSwapProfessor(schedule._id, 'examinator', p._id)} active={p._id === schedule.examinator?._id}>{p.name}</Dropdown.Item>)}
+                                                    </Dropdown.Menu>
+                                                </Dropdown>
+                                            </ListGroup.Item>
                                         </ListGroup>
                                         <div className="d-flex gap-2">
                                             <Button variant="outline-primary" size="sm" onClick={() => handleEdit(schedule)}>✏️ Edit</Button>
@@ -398,10 +417,20 @@ const Planning = () => {
                                                                                 <div className="fw-bold text-primary mb-1" style={{ display: '-webkit-box', WebkitLineClamp: '2', WebkitBoxOrient: 'vertical', overflow: 'hidden', lineHeight: '1.2' }}>{s.thesis?.title}</div>
                                                                                 <div className="text-muted">
                                                                                     <div className="text-truncate">👤 <strong>{s.student?.name}</strong></div>
-                                                                                    <div className="d-flex flex-column">
-                                                                                        <span>👨‍🏫 {s.supervisor?.name?.split(' ').pop()}</span>
-                                                                                        <span>🎯 {s.principal?.name?.split(' ').pop()}</span>
-                                                                                        <span>🔍 {s.examinator?.name?.split(' ').pop()}</span>
+                                                                                    <div className="d-flex flex-column gap-1 mt-1">
+                                                                                        <div className="text-muted small" style={{ fontSize: '0.7rem' }}>👨‍🏫 {s.supervisor?.name?.split(' ').pop() || "None"}</div>
+                                                                                        <Dropdown size="sm">
+                                                                                            <Dropdown.Toggle variant="link" className="p-0 text-decoration-none text-muted small" style={{ fontSize: '0.7rem' }}>🎯 {s.principal?.name?.split(' ').pop() || "None"}</Dropdown.Toggle>
+                                                                                            <Dropdown.Menu style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                                                                                                {professors.map(p => <Dropdown.Item key={p._id} onClick={() => quickSwapProfessor(s._id, 'principal', p._id)} active={p._id === s.principal?._id}>{p.name}</Dropdown.Item>)}
+                                                                                            </Dropdown.Menu>
+                                                                                        </Dropdown>
+                                                                                        <Dropdown size="sm">
+                                                                                            <Dropdown.Toggle variant="link" className="p-0 text-decoration-none text-muted small" style={{ fontSize: '0.7rem' }}>🔍 {s.examinator?.name?.split(' ').pop() || "None"}</Dropdown.Toggle>
+                                                                                            <Dropdown.Menu style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                                                                                                {professors.map(p => <Dropdown.Item key={p._id} onClick={() => quickSwapProfessor(s._id, 'examinator', p._id)} active={p._id === s.examinator?._id}>{p.name}</Dropdown.Item>)}
+                                                                                            </Dropdown.Menu>
+                                                                                        </Dropdown>
                                                                                     </div>
                                                                                 </div>
                                                                             </div>
