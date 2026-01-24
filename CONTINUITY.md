@@ -22,6 +22,8 @@
         - Excel Import feature implemented for bulk data entry (Theses and Users).
         - Refined auto-planning logic to match `juries.xlsx` template (35-min slots, 07:15/13:30 shifts).
         - Excel Export feature to download schedules in template format.
+        - Implemented exact-layout DOCX (Word) export for schedules using 'docx' library.
+        - Updated import logic to support new Excel format (headers like "Mã sinh viên", "Tên luận văn", "Họ và Tên").
         - Fixed Thesis Import logic to skip header/template placeholder rows.
         - Implemented Upsert logic for thesis import (prevents duplicates, updates existing).
         - Performed manual cleanup of "junk" data imported from Excel templates.

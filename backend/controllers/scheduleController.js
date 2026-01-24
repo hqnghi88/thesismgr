@@ -3,6 +3,8 @@ const Thesis = require("../models/Thesis");
 const User = require("../models/User");
 const xlsx = require("xlsx");
 const mongoose = require("mongoose");
+const { Document, Packer, Paragraph, Table, TableRow, TableCell, TextRun, AlignmentType, WidthType, BorderStyle, HeadingLevel, VerticalAlign } = require("docx");
+const fs = require("fs");
 
 const getConflicts = async (startTime, room, principalId, examinatorId, supervisorId, excludeScheduleId = null) => {
     try {
@@ -311,4 +313,152 @@ const deleteAllSchedules = async (req, res) => {
     }
 };
 
-module.exports = { autoPlan, getSchedules, updateSchedule, deleteSchedule, exportSchedules, deleteAllSchedules };
+const exportDocx = async (req, res) => {
+    try {
+        const schedules = await Schedule.find()
+            .populate('thesis principal examinator supervisor student')
+            .sort({ startTime: 1, room: 1 });
+
+        if (schedules.length === 0) return res.status(404).json({ message: "No data to export" });
+
+        // Group by Date -> Room
+        const groups = {};
+        schedules.forEach(s => {
+            const dateStr = new Date(s.startTime).toLocaleDateString('vi-VN');
+            if (!groups[dateStr]) groups[dateStr] = {};
+            if (!groups[dateStr][s.room]) groups[dateStr][s.room] = [];
+            groups[dateStr][s.room].push(s);
+        });
+
+        const children = [];
+
+        // Header Section
+        children.push(
+            new Paragraph({
+                alignment: AlignmentType.CENTER,
+                children: [new TextRun({ text: "ĐẠI HỌC CẦN THƠ", bold: true, size: 24 })],
+            }),
+            new Paragraph({
+                alignment: AlignmentType.CENTER,
+                children: [new TextRun({ text: "TRƯỜNG CÔNG NGHỆ THÔNG TIN & TRUYỀN THÔNG", bold: true, size: 24 })],
+            }),
+            new Paragraph({
+                alignment: AlignmentType.CENTER,
+                children: [
+                    new TextRun({ text: "DANH SÁCH HỘI ĐỒNG BẢO VỆ LUẬN VĂN TỐT NGHIỆP", bold: true, size: 28 }),
+                ],
+                spacing: { before: 200 }
+            }),
+            new Paragraph({
+                alignment: AlignmentType.CENTER,
+                children: [new TextRun({ text: "Khoa: Công nghệ phần mềm", italic: true, size: 24 })],
+            }),
+            new Paragraph({
+                alignment: AlignmentType.CENTER,
+                children: [new TextRun({ text: "(Kèm theo quyết định số           /QĐ-CNTT&TT ngày     /      /2025)", size: 22 })],
+            }),
+            new Paragraph({
+                children: [
+                    new TextRun({ text: "Ghi chú: Vai trò các thành viên Hội đồng : (1) – Chủ tịch, (2) – Ủy viên, (3) – Thư ký", italic: true, size: 18 }),
+                ],
+                spacing: { before: 200, after: 200 }
+            })
+        );
+
+        // Process Groups
+        Object.keys(groups).forEach(date => {
+            Object.keys(groups[date]).forEach(room => {
+                const roomSchedules = groups[date][room];
+
+                children.push(new Paragraph({
+                    children: [new TextRun({ text: `Ngày ${date} - ${room}`, bold: true, size: 24, underline: {} })],
+                    spacing: { before: 300, after: 150 }
+                }));
+
+                // Width definitions in DXA (1440 DXA = 1 inch)
+                const colWidths = [500, 1200, 2000, 3500, 1800, 1000, 2500];
+
+                const tableRows = [
+                    new TableRow({
+                        children: [
+                            new TableCell({ width: { size: colWidths[0], type: WidthType.DXA }, verticalAlign: VerticalAlign.CENTER, children: [new Paragraph({ text: "STT", alignment: AlignmentType.CENTER, style: { bold: true } })] }),
+                            new TableCell({ width: { size: colWidths[1], type: WidthType.DXA }, verticalAlign: VerticalAlign.CENTER, children: [new Paragraph({ text: "MSSV", alignment: AlignmentType.CENTER })] }),
+                            new TableCell({ width: { size: colWidths[2], type: WidthType.DXA }, verticalAlign: VerticalAlign.CENTER, children: [new Paragraph({ text: "Họ tên SV", alignment: AlignmentType.CENTER })] }),
+                            new TableCell({ width: { size: colWidths[3], type: WidthType.DXA }, verticalAlign: VerticalAlign.CENTER, children: [new Paragraph({ text: "Tên đề tài", alignment: AlignmentType.CENTER })] }),
+                            new TableCell({ width: { size: colWidths[4], type: WidthType.DXA }, verticalAlign: VerticalAlign.CENTER, children: [new Paragraph({ text: "GVHD", alignment: AlignmentType.CENTER })] }),
+                            new TableCell({ width: { size: colWidths[5], type: WidthType.DXA }, verticalAlign: VerticalAlign.CENTER, children: [new Paragraph({ text: "Giờ bảo vệ", alignment: AlignmentType.CENTER })] }),
+                            new TableCell({ width: { size: colWidths[6], type: WidthType.DXA }, verticalAlign: VerticalAlign.CENTER, children: [new Paragraph({ text: "Hội đồng", alignment: AlignmentType.CENTER })] }),
+                        ],
+                        tableHeader: true,
+                    })
+                ];
+
+                roomSchedules.forEach((s, idx) => {
+                    const timeStr = new Date(s.startTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }).replace(':', 'h');
+
+                    tableRows.push(new TableRow({
+                        children: [
+                            new TableCell({ children: [new Paragraph({ text: (idx + 1).toString(), alignment: AlignmentType.CENTER })] }),
+                            new TableCell({ children: [new Paragraph({ text: s.student?.email?.split('@')[0].toUpperCase() || "-" })] }),
+                            new TableCell({ children: [new Paragraph({ text: s.student?.name || "-" })] }),
+                            new TableCell({
+                                children: [
+                                    new Paragraph({
+                                        children: [new TextRun({ text: s.thesis?.title || "-", size: 20 })]
+                                    })
+                                ]
+                            }),
+                            new TableCell({ children: [new Paragraph({ text: s.supervisor?.name || "-", size: 20 })] }),
+                            new TableCell({ children: [new Paragraph({ text: timeStr, alignment: AlignmentType.CENTER })] }),
+                            new TableCell({
+                                children: [
+                                    new Paragraph({
+                                        children: [
+                                            new TextRun({ text: `1. ${s.principal?.name || "-"}`, size: 20 }),
+                                            new TextRun({ text: "", break: 1 }),
+                                            new TextRun({ text: `2. ${s.examinator?.name || "-"}`, size: 20 }),
+                                            new TextRun({ text: "", break: 1 }),
+                                            new TextRun({ text: `3. ${s.supervisor?.name || "-"}`, size: 20 }),
+                                        ]
+                                    })
+                                ]
+                            }),
+                        ]
+                    }));
+                });
+
+                children.push(new Table({
+                    rows: tableRows,
+                    width: { size: 100, type: WidthType.PERCENTAGE },
+                }));
+            });
+        });
+
+        const doc = new Document({
+            sections: [{
+                properties: {
+                    page: {
+                        margin: {
+                            top: 720,
+                            bottom: 720,
+                            left: 720,
+                            right: 720,
+                        },
+                    },
+                },
+                children: children,
+            }],
+        });
+
+        const buffer = await Packer.toBuffer(doc);
+        res.setHeader('Content-Disposition', 'attachment; filename="ListHoiDong.docx"');
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+        res.send(buffer);
+
+    } catch (error) {
+        console.error("Export Docx Error:", error);
+        res.status(500).json({ message: "DOCX Export error" });
+    }
+};
+
+module.exports = { autoPlan, getSchedules, updateSchedule, deleteSchedule, exportSchedules, exportDocx, deleteAllSchedules };

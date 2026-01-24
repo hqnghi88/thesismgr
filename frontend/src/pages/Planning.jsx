@@ -206,7 +206,26 @@ const Planning = () => {
             link.click();
             link.remove();
         } catch (err) {
-            alert("Error exporting schedule");
+            alert("Error exporting Excel");
+        }
+    };
+
+    const handleExportDocx = async () => {
+        try {
+            const res = await axios.get(`${import.meta.env.VITE_API_URL}/api/schedule/export-docx`, {
+                headers: { Authorization: `Bearer ${token}` },
+                responseType: 'blob'
+            });
+            const blob = new Blob([res.data], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', 'ListHoiDong.docx');
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+        } catch (err) {
+            alert("Error exporting Word document");
         }
     };
 
@@ -289,6 +308,7 @@ const Planning = () => {
                         <Button variant="success" onClick={handleAutoPlan} disabled={loading}>{loading ? "Planning..." : "🤖 Run Auto-Planning"}</Button>
                         <Button variant="outline-danger" onClick={handleDeleteAllSchedules}>🗑️ Clear All</Button>
                         <Button variant="primary" onClick={handleExport}>📥 Export Excel</Button>
+                        <Button variant="info" className="text-white" onClick={handleExportDocx}>📝 Export Word</Button>
                     </Card.Body>
                 </Card>
 

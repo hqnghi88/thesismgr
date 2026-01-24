@@ -84,7 +84,7 @@ const importThesesFromExcel = async (req, res) => {
         let headerRowIndex = -1;
         for (let i = 0; i < Math.min(rows.length, 10); i++) {
             const rowArr = rows[i];
-            if (rowArr && rowArr.some(cell => String(cell).includes('MSSV') || String(cell).includes('Họ tên SV'))) {
+            if (rowArr && rowArr.some(cell => String(cell).includes('MSSV') || String(cell).includes('Họ tên SV') || String(cell).includes('Mã sinh viên'))) {
                 headerRowIndex = i;
                 break;
             }
@@ -108,9 +108,9 @@ const importThesesFromExcel = async (req, res) => {
                 if (h) row[String(h).trim()] = rowArr[idx];
             });
 
-            const mssv = row['MSSV'] || row['MÃ SV'] || row['Mã SV'];
-            const studentName = row['Họ tên SV'] || row['Họ và Tên SV'] || row['Student Name'];
-            const title = row['Tên đề tài'] || row['Thesis Title'] || row['Tên đề tài (Tiếng Việt và Tiếng Anh)'];
+            const mssv = row['MSSV'] || row['MÃ SV'] || row['Mã SV'] || row['Mã sinh viên'];
+            const studentName = row['Họ tên SV'] || row['Họ và Tên SV'] || row['Student Name'] || row['Họ và Tên'];
+            const title = row['Tên đề tài'] || row['Thesis Title'] || row['Tên đề tài (Tiếng Việt và Tiếng Anh)'] || row['Tên luận văn'];
             const supervisorName = row['GVHD'] || row['Người hướng dẫn'] || row['Supervisor'] || row['Cán bộ hướng dẫn'];
 
             if (!mssv || !studentName || !title || !supervisorName) continue;
