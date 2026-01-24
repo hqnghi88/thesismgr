@@ -115,7 +115,17 @@ const importThesesFromExcel = async (req, res) => {
 
             if (!mssv || !studentName || !title || !supervisorName) continue;
 
-            const studentEmail = `${String(mssv).toLowerCase().trim()}@student.ctu.edu.vn`;
+            const sMssv = String(mssv).trim().toLowerCase();
+            const sName = String(studentName).trim().toLowerCase();
+            const sSuper = String(supervisorName).trim().toLowerCase();
+
+            // Skip template/header rows or rows containing header labels
+            const skipLabels = ['mssv', 'mã sv', 'họ tên sv', 'họ và tên sv', 'gvhd', 'người hướng dẫn', 'update status', 'trạng thái'];
+            if (skipLabels.includes(sMssv) || skipLabels.includes(sName) || skipLabels.includes(sSuper)) {
+                continue;
+            }
+
+            const studentEmail = `${sMssv}@student.ctu.edu.vn`;
 
             // 1. Handle Student
             let student = await User.findOne({ email: studentEmail });
@@ -162,14 +172,21 @@ const importThesesFromExcel = async (req, res) => {
                 await professor.save();
             }
 
-            // 3. Create Thesis
-            const newThesis = new Thesis({
+            // 3. Create or Update Thesis
+            const thesisData = {
                 student: student._id,
                 supervisor: professor._id,
                 title: String(title).trim(),
                 status: "approved"
-            });
-            await newThesis.save();
+            };
+
+            const existingThesis = await Thesis.findOne({ student: student._id });
+            if (existingThesis) {
+                await Thesis.findByIdAndUpdate(existingThesis._id, thesisData);
+            } else {
+                const newThesis = new Thesis(thesisData);
+                await newThesis.save();
+            }
             count++;
         }
 

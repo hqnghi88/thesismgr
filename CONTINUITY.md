@@ -13,13 +13,17 @@
     - Added Admin pages for user and thesis oversight.
 - State:
     - Done:
-        - MongoDB/Docker/Backend/Frontend environment setup.
+        - Full Dockerization (backend, frontend, mongodb) with docker-compose.
+
         - Full project restructuring into a Thesis CMS.
         - Admin user management implemented with full CRUD.
         - Thesis audit and assignment capabilities added with Delete support.
         - Excel Import feature implemented for bulk data entry (Theses and Users).
         - Refined auto-planning logic to match `juries.xlsx` template (35-min slots, 07:15/13:30 shifts).
         - Excel Export feature to download schedules in template format.
+        - Fixed Thesis Import logic to skip header/template placeholder rows.
+        - Implemented Upsert logic for thesis import (prevents duplicates, updates existing).
+        - Performed manual cleanup of "junk" data imported from Excel templates.
         - Edit functionality added to thesis cards (students can edit their own theses).
         - Edit functionality added to schedule/planning cards (admins can modify jury, time, room).
         - Manual removal (Delete) of schedules verified.
