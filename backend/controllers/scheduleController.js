@@ -86,6 +86,7 @@ const autoPlan = async (req, res) => {
         const afternoonSlots = ["13:30", "14:05", "14:40", "15:15", "15:50", "16:25"];
 
         let plannedCount = 0;
+        const TZ_OFFSET = 7; // Vietnam Time
 
         // 5. Execution Loop
         for (const sId of sortedSIds) {
@@ -94,26 +95,29 @@ const autoPlan = async (req, res) => {
 
             while (thesisIdx < theses.length) {
                 const remaining = theses.length - thesisIdx;
-                const batchSize = Math.min(remaining, 6); // Try to schedule up to 6 in a row
+                const batchSize = Math.min(remaining, 6);
                 const currentBatch = theses.slice(thesisIdx, thesisIdx + batchSize);
 
                 let placed = false;
-                let dayOffset = 1;
+                let dayOffset = 1; // Start from tomorrow to ensure full shifts
 
                 while (!placed && dayOffset < 30) {
                     const searchDay = new Date();
                     searchDay.setDate(searchDay.getDate() + dayOffset);
-                    searchDay.setHours(0, 0, 0, 0);
+                    searchDay.setUTCHours(0, 0, 0, 0); // Use UTC to avoid double-shifting
 
                     searchLoop: for (const room of rooms) {
                         for (const shift of [morningSlots, afternoonSlots]) {
 
-                            // Check for 'batchSize' FREE slots in this shift
                             let availableSlots = [];
                             for (const slotStr of shift) {
                                 const st = new Date(searchDay);
                                 const [h, m] = slotStr.split(':');
-                                st.setHours(parseInt(h), parseInt(m), 0, 0);
+                                // Adjust to UTC to represent the local time correctly in the DB
+                                st.setUTCHours(parseInt(h) - TZ_OFFSET, parseInt(m), 0, 0);
+
+                                // Skip if slot is in the past
+                                if (st < new Date()) continue;
 
                                 const occupied = await Schedule.findOne({ startTime: st, room });
                                 if (!occupied) {

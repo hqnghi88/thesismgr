@@ -20,6 +20,8 @@
         - Admin user management implemented with full CRUD.
         - Thesis audit and assignment capabilities added with Delete support.
         - Excel Import feature implemented for bulk data entry (Theses and Users).
+        - Fixed timezone offset (+7) for auto-planning start times to ensure 07:15 means 07:15 local time.
+        - Enabled starting auto-planning from the current day (instead of tomorrow only).
         - Enabled configurable auto-planning (e.g. room count selection before running).
         - Refined auto-planning logic to match `juries.xlsx` template (35-min slots, 07:15/13:30 shifts).
         - Excel Export feature to download schedules in template format.
