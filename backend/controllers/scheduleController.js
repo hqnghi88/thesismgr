@@ -260,11 +260,20 @@ const deleteSchedule = async (req, res) => {
 
 const deleteAllSchedules = async (req, res) => {
     try {
-        await Schedule.deleteMany({});
-        await Thesis.updateMany({}, { status: 'approved' });
-        res.status(200).json({ message: "Cleared all" });
+        const [deleteResult, updateResult] = await Promise.all([
+            Schedule.deleteMany({}),
+            Thesis.updateMany({ status: 'scheduled' }, { $set: { status: 'approved' } })
+        ]);
+        
+        console.log(`Deleted ${deleteResult.deletedCount} schedules and reset ${updateResult.modifiedCount} theses.`);
+        
+        res.status(200).json({ 
+            message: "Successfully cleared all schedules.",
+            details: `Deleted: ${deleteResult.deletedCount}, Reset: ${updateResult.modifiedCount}`
+        });
     } catch (error) {
-        res.status(500).json({ message: "Server error" });
+        console.error("Delete All Schedules Error:", error);
+        res.status(500).json({ message: `Server error: ${error.message}` });
     }
 };
 
