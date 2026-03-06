@@ -26,6 +26,7 @@ const Planning = () => {
         roomCount: 4
     });
     const [profSearch, setProfSearch] = useState('');
+    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const token = localStorage.getItem("token");
 
     const fetchSchedules = async () => {
@@ -139,6 +140,7 @@ const Planning = () => {
     };
 
     const handleMoveOrSwap = async (targetId, targetTime, targetRoom) => {
+        if (isDropdownOpen) return;
         if (!movingId) {
             setMovingId(targetId);
             return;
@@ -473,19 +475,29 @@ const Planning = () => {
                                             </ListGroup.Item>
                                             <ListGroup.Item className="px-0 py-1 border-0 d-flex align-items-center gap-1">
                                                 🎯 <strong>PR:</strong>
-                                                <Dropdown size="sm">
+                                                <Dropdown size="sm" onToggle={(isOpen) => { setIsDropdownOpen(isOpen); if (!isOpen) setProfSearch(''); }}>
                                                     <Dropdown.Toggle variant="link" className="p-0 text-decoration-none text-dark fw-normal">{schedule.principal?.name || "None"}</Dropdown.Toggle>
                                                     <Dropdown.Menu style={{ maxHeight: '250px', overflowY: 'auto' }}>
-                                                        {professors.map(p => <Dropdown.Item key={p._id} onClick={() => quickSwapProfessor(schedule._id, 'principal', p._id)} active={p._id === schedule.principal?._id}>{p.name}</Dropdown.Item>)}
+                                                        <div className="px-3 py-1 border-bottom bg-light sticky-top">
+                                                            <Form.Control size="sm" placeholder="Search..." value={profSearch} onChange={(e) => setProfSearch(e.target.value)} onClick={(e) => e.stopPropagation()} />
+                                                        </div>
+                                                        {professors.filter(p => p.name.toLowerCase().includes(profSearch.toLowerCase())).map(p => (
+                                                            <Dropdown.Item key={p._id} onClick={(e) => { e.stopPropagation(); quickSwapProfessor(schedule._id, 'principal', p._id); }} active={p._id === schedule.principal?._id}>{p.name}</Dropdown.Item>
+                                                        ))}
                                                     </Dropdown.Menu>
                                                 </Dropdown>
                                             </ListGroup.Item>
                                             <ListGroup.Item className="px-0 py-1 border-0 d-flex align-items-center gap-1">
                                                 🔍 <strong>EX:</strong>
-                                                <Dropdown size="sm">
+                                                <Dropdown size="sm" onToggle={(isOpen) => { setIsDropdownOpen(isOpen); if (!isOpen) setProfSearch(''); }}>
                                                     <Dropdown.Toggle variant="link" className="p-0 text-decoration-none text-dark fw-normal">{schedule.examinator?.name || "None"}</Dropdown.Toggle>
                                                     <Dropdown.Menu style={{ maxHeight: '250px', overflowY: 'auto' }}>
-                                                        {professors.map(p => <Dropdown.Item key={p._id} onClick={() => quickSwapProfessor(schedule._id, 'examinator', p._id)} active={p._id === schedule.examinator?._id}>{p.name}</Dropdown.Item>)}
+                                                        <div className="px-3 py-1 border-bottom bg-light sticky-top">
+                                                            <Form.Control size="sm" placeholder="Search..." value={profSearch} onChange={(e) => setProfSearch(e.target.value)} onClick={(e) => e.stopPropagation()} />
+                                                        </div>
+                                                        {professors.filter(p => p.name.toLowerCase().includes(profSearch.toLowerCase())).map(p => (
+                                                            <Dropdown.Item key={p._id} onClick={(e) => { e.stopPropagation(); quickSwapProfessor(schedule._id, 'examinator', p._id); }} active={p._id === schedule.examinator?._id}>{p.name}</Dropdown.Item>
+                                                        ))}
                                                     </Dropdown.Menu>
                                                 </Dropdown>
                                             </ListGroup.Item>
@@ -545,22 +557,22 @@ const Planning = () => {
                                                                                     <div className="text-truncate">👤 <strong>{s.student?.name}</strong></div>
                                                                                     <div className="d-flex flex-column gap-1 mt-1" onClick={(e) => e.stopPropagation()}>
                                                                                         <div className="text-muted small" style={{ fontSize: '0.7rem' }}>👨‍🏫 {s.supervisor?.name?.split(' ').pop() || "None"}</div>
-                                                                                        <Dropdown size="sm">
+                                                                                        <Dropdown size="sm" onToggle={(isOpen) => { setIsDropdownOpen(isOpen); if (!isOpen) setProfSearch(''); }}>
                                                                                             <Dropdown.Toggle variant="link" className="p-0 text-decoration-none text-muted small" style={{ fontSize: '0.7rem' }}>🎯 {s.principal?.name?.split(' ').pop() || "None"}</Dropdown.Toggle>
                                                                                             <Dropdown.Menu style={{ maxHeight: '350px', overflowY: 'auto', minWidth: '250px' }}>
                                                                                                 <div className="px-3 py-1 border-bottom bg-light sticky-top">
                                                                                                     <Form.Control size="sm" placeholder="Search professor..." value={profSearch} onChange={(e) => setProfSearch(e.target.value)} onClick={(e) => e.stopPropagation()} />
                                                                                                 </div>
-                                                                                                {professors.filter(p => p.name.toLowerCase().includes(profSearch.toLowerCase())).map(p => <Dropdown.Item key={p._id} onClick={(e) => { e.stopPropagation(); quickSwapProfessor(s._id, 'principal', p._id); setProfSearch(''); }} active={p._id === s.principal?._id}>{p.name}</Dropdown.Item>)}
+                                                                                                {professors.filter(p => p.name.toLowerCase().includes(profSearch.toLowerCase())).map(p => <Dropdown.Item key={p._id} onClick={(e) => { e.stopPropagation(); quickSwapProfessor(s._id, 'principal', p._id); }} active={p._id === s.principal?._id}>{p.name}</Dropdown.Item>)}
                                                                                             </Dropdown.Menu>
                                                                                         </Dropdown>
-                                                                                        <Dropdown size="sm">
+                                                                                        <Dropdown size="sm" onToggle={(isOpen) => { setIsDropdownOpen(isOpen); if (!isOpen) setProfSearch(''); }}>
                                                                                             <Dropdown.Toggle variant="link" className="p-0 text-decoration-none text-muted small" style={{ fontSize: '0.7rem' }}>🔍 {s.examinator?.name?.split(' ').pop() || "None"}</Dropdown.Toggle>
                                                                                             <Dropdown.Menu style={{ maxHeight: '350px', overflowY: 'auto', minWidth: '250px' }}>
                                                                                                 <div className="px-3 py-1 border-bottom bg-light sticky-top">
                                                                                                     <Form.Control size="sm" placeholder="Search professor..." value={profSearch} onChange={(e) => setProfSearch(e.target.value)} onClick={(e) => e.stopPropagation()} />
                                                                                                 </div>
-                                                                                                {professors.filter(p => p.name.toLowerCase().includes(profSearch.toLowerCase())).map(p => <Dropdown.Item key={p._id} onClick={(e) => { e.stopPropagation(); quickSwapProfessor(s._id, 'examinator', p._id); setProfSearch(''); }} active={p._id === s.examinator?._id}>{p.name}</Dropdown.Item>)}
+                                                                                                {professors.filter(p => p.name.toLowerCase().includes(profSearch.toLowerCase())).map(p => <Dropdown.Item key={p._id} onClick={(e) => { e.stopPropagation(); quickSwapProfessor(s._id, 'examinator', p._id); }} active={p._id === s.examinator?._id}>{p.name}</Dropdown.Item>)}
                                                                                             </Dropdown.Menu>
                                                                                         </Dropdown>
                                                                                     </div>

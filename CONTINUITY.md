@@ -51,10 +51,13 @@
         - Refined thesis import logic to reuse existing professors by name matching (avoids duplicate accounts).
         - Implemented data integrity checks to prevent deleting users who are active in the schedule (avoids blank/orphaned positions).
         - Added visual placeholders ("⚠️ Missing Member") in the UI to easily identify any remaining orphaned records.
+        - Fixed Planning UX where clicking outside a dropdown would accidentally trigger thesis movement/swapping.
+        - Synchronized search feature and consistent dropdown behavior across List and Timetable views in Planning.
         - Created `frontend/netlify.toml` for SPA routing on Netlify.
         - Created root `render.yaml` for backend deployment on Render.
 
     - Now:
+        - Retrieved local Admin record for production database seeding.
         - Preparing deployment instructions for Netlify and Render.com.
 
     - Next:
