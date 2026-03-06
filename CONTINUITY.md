@@ -1,21 +1,23 @@
 # Ledger: thesis-mgr
 
-- Goal: Restructure the template into a Thesis CMS with automatic jury timeslot planning and comprehensive Admin management.
+- Goal: Restructure the template into a Thesis CMS with automatic jury timeslot planning and comprehensive Admin management. Deploy frontend to Netlify and backend to Render.com.
 - Constraints/Assumptions:
     - Backend: Express/Mongoose.
     - Frontend: React/Vite.
     - Roles: Student, Professor, Admin.
     - Jury structure: Student, Supervisor, 1 Principal (Prof), 1 Examinator (Prof).
+    - Deployment: Netlify (Frontend), Render.com (Backend).
 - Key decisions:
     - Implemented role-based access control (RBAC).
     - Created Thesis and Schedule models with specific jury roles.
     - Developed an auto-planning algorithm for defenses.
     - Added Admin pages for user and thesis oversight.
+    - Configured `netlify.toml` for frontend deployment.
+    - Configured `render.yaml` for backend deployment.
 - State:
     - Done:
         - Full Dockerization (backend, frontend, mongodb) with docker-compose.
         - Enabled Hot-Reload (Auto-Update) using Docker Volumes and Nodemon.
-
         - Full project restructuring into a Thesis CMS.
         - Admin user management implemented with full CRUD.
         - Thesis audit and assignment capabilities added with Delete support.
@@ -49,12 +51,15 @@
         - Refined thesis import logic to reuse existing professors by name matching (avoids duplicate accounts).
         - Implemented data integrity checks to prevent deleting users who are active in the schedule (avoids blank/orphaned positions).
         - Added visual placeholders ("⚠️ Missing Member") in the UI to easily identify any remaining orphaned records.
+        - Created `frontend/netlify.toml` for SPA routing on Netlify.
+        - Created root `render.yaml` for backend deployment on Render.
 
     - Now:
-        - All requested features implemented and verified.
+        - Preparing deployment instructions for Netlify and Render.com.
 
     - Next:
-        - Maintenance or further feature expansion as requested by the user.
+        - Verify build processes locally to ensure they will pass on CI.
+        - Assist user with environment variable setup on both platforms.
 - Open questions:
     - None.
 - Working set:
