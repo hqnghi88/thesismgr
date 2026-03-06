@@ -36,8 +36,10 @@
         - Implemented professor and room conflict detection for scheduling.
         - Completely redesigned UI using Bootstrap for a professional look.
         - Ensured full mobile responsiveness across all admin pages.
-        - Added Timetable view to the Planning page with quick inline editing (swap professors, shift time, change room).
-        - Enabled quick professor role swapping (Principal, Examinator) directly in List View and Timetable.
+        - Added Timetable view to the Planning page with a premium **Pick & Drop / Atomic Swap** UX for lightning-fast reorganization.
+        - Allowed quick professor role swapping (Principal, Examinator) directly in List View and Timetable.
+        - Fixed a `ReferenceError` crash in `Planning.jsx` caused by out-of-order initialization.
+        - Verified and confirmed Admin account seeding.
         - Made Supervisor role read-only in planning views to maintain data integrity.
         - Implemented a global Notification Modal system to replace native bank alerts/confirms.
         - Enforced jury member uniqueness (Principal, Examinator, Supervisor must be different).

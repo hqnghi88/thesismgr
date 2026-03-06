@@ -155,7 +155,11 @@ const updateUserAdmin = async (req, res) => {
 
 const getProfessors = async (req, res) => {
   try {
-    const professors = await User.find({ role: 'professor' }).select('name email');
+    // Return all users who can be part of a jury (Professors and Admins)
+    const professors = await User.find({
+      role: { $in: ['professor', 'admin'] }
+    }).select('name email').sort({ name: 1 });
+
     res.status(200).json(professors);
   } catch (error) {
     res.status(500).json({ message: "Server error" });

@@ -20,9 +20,12 @@ const Planning = () => {
     });
     const [error, setError] = useState('');
     const [showAutoPlanModal, setShowAutoPlanModal] = useState(false);
+    const [movingId, setMovingId] = useState(null);
+    const availableRooms = ["Room 110/DI", "Room 111/DI", "Room 112/DI", "Room 113/DI"];
     const [autoPlanParams, setAutoPlanParams] = useState({
         roomCount: 4
     });
+    const [profSearch, setProfSearch] = useState('');
     const token = localStorage.getItem("token");
 
     const fetchSchedules = async () => {
@@ -135,6 +138,54 @@ const Planning = () => {
         }
     };
 
+    const handleMoveOrSwap = async (targetId, targetTime, targetRoom) => {
+        if (!movingId) {
+            setMovingId(targetId);
+            return;
+        }
+
+        // If clicking the same one, cancel
+        if (movingId === targetId) {
+            setMovingId(null);
+            return;
+        }
+
+        const source = schedules.find(s => s._id === movingId);
+
+        try {
+            if (targetId) {
+                // ATOMIC SWAP
+                await axios.post(`${import.meta.env.VITE_API_URL}/api/schedule/swap`, {
+                    id1: movingId,
+                    id2: targetId
+                }, { headers: { Authorization: `Bearer ${token}` } });
+
+                // notify("Swapped positions successfully!");
+            } else {
+                // MOVE LOGIC (to empty slot)
+                const newStart = new Date(targetTime);
+                const newEnd = new Date(newStart);
+                newEnd.setMinutes(newEnd.getMinutes() + 35);
+
+                await axios.put(`${import.meta.env.VITE_API_URL}/api/schedule/${source._id}`, {
+                    startTime: newStart.toISOString(),
+                    endTime: newEnd.toISOString(),
+                    room: targetRoom,
+                    principal: source.principal?._id,
+                    examinator: source.examinator?._id,
+                    supervisor: source.supervisor?._id
+                }, { headers: { Authorization: `Bearer ${token}` } });
+
+                // notify("Moved to new slot!");
+            }
+            fetchSchedules();
+        } catch (err) {
+            notify(err.response?.data?.message || "Error reorganizing schedule");
+        } finally {
+            setMovingId(null);
+        }
+    };
+
     const quickSwapProfessor = async (scheduleId, role, newProfId) => {
         try {
             const schedule = schedules.find(s => s._id === scheduleId);
@@ -242,18 +293,25 @@ const Planning = () => {
     }, []);
 
     const generateTimetable = () => {
-        const availableRooms = ["Room 110/DI", "Room 111/DI", "Room 112/DI", "Room 113/DI"];
-        const dates = [...new Set(schedules.map(s => new Date(s.startTime).toLocaleDateString()))].sort();
+        const morningSlots = ["07:15", "07:50", "08:25", "09:00", "09:35", "10:10"];
+        const afternoonSlots = ["13:30", "14:05", "14:40", "15:15", "15:50", "16:25"];
+        const allStandardTimeSlots = [...morningSlots, ...afternoonSlots];
 
-        return dates.map(date => {
-            const daySchedules = schedules.filter(s => new Date(s.startTime).toLocaleDateString() === date);
-            const roomsFromSchedules = [...new Set(daySchedules.map(s => s.room))];
-            const rooms = [...new Set([...availableRooms, ...roomsFromSchedules])].sort();
+        const dates = [...new Set(schedules.map(s => {
+            const d = new Date(s.startTime);
+            d.setHours(0, 0, 0, 0);
+            return d.toISOString();
+        }))].sort();
 
-            const timeSlots = [...new Set(daySchedules.map(s => {
-                const d = new Date(s.startTime);
-                return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
-            }))].sort();
+        return dates.map(isoDay => {
+            const dateObj = new Date(isoDay);
+            const dateLabel = dateObj.toLocaleDateString('vi-VN');
+            const daySchedules = schedules.filter(s => {
+                const sd = new Date(s.startTime);
+                sd.setHours(0, 0, 0, 0);
+                return sd.toISOString() === isoDay;
+            });
+            const rooms = [...new Set([...availableRooms, ...daySchedules.map(s => s.room)])].sort();
 
             const timetableData = {};
             daySchedules.forEach(schedule => {
@@ -261,12 +319,11 @@ const Planning = () => {
                 timetableData[`${time}-${schedule.room}`] = schedule;
             });
 
-            return { date, rooms, timeSlots, timetableData };
+            return { date: dateLabel, rooms, timeSlots: allStandardTimeSlots, timetableData, rawDate: isoDay };
         });
     };
 
     const dayWiseTimetables = generateTimetable();
-    const availableRooms = ["Room 110/DI", "Room 111/DI", "Room 112/DI", "Room 113/DI"];
 
     // Statistical Summary Logic
     const getProfessorStats = () => {
@@ -446,7 +503,7 @@ const Planning = () => {
 
                 {viewMode === 'timetable' && (
                     <div className="d-flex flex-column gap-5">
-                        {dayWiseTimetables.map(({ date, rooms, timeSlots, timetableData }) => (
+                        {dayWiseTimetables.map(({ date, rooms, timeSlots, timetableData, rawDate }) => (
                             <div key={date}>
                                 <h4 className="fw-bold mb-3 text-secondary border-bottom pb-2">🗓️ Schedule for {date}</h4>
                                 <Card className="border-0 shadow-sm overflow-hidden">
@@ -466,46 +523,57 @@ const Planning = () => {
                                                         <td className="fw-bold align-middle bg-light small" style={{ fontSize: '0.75rem' }}>{time}</td>
                                                         {rooms.map(room => {
                                                             const s = timetableData[`${time}-${room}`];
+                                                            const isMoving = movingId === s?._id;
+
+                                                            // Calculate ISO string for this slot
+                                                            const [h, m] = time.split(':');
+                                                            const slotDate = new Date(rawDate);
+                                                            slotDate.setHours(parseInt(h), parseInt(m), 0, 0);
+
                                                             return (
-                                                                <td key={`${time}-${room}`} className="p-1 align-middle" style={{ height: '140px' }}>
+                                                                <td
+                                                                    key={`${time}-${room}`}
+                                                                    className={`p-1 align-middle cursor-pointer transition-all ${movingId ? (s ? (isMoving ? 'bg-primary-subtle' : 'bg-warning-subtle') : 'bg-success-subtle') : ''}`}
+                                                                    style={{ height: '140px', cursor: 'pointer' }}
+                                                                    onClick={() => handleMoveOrSwap(s?._id, slotDate.toISOString(), room)}
+                                                                >
                                                                     {s ? (
-                                                                        <div className="text-start p-2 rounded h-100 d-flex flex-column justify-content-between shadow-sm border-start border-3 border-primary" style={{ backgroundColor: '#fff', fontSize: '0.72rem' }}>
+                                                                        <div className={`text-start p-2 rounded h-100 d-flex flex-column justify-content-between shadow-sm border-start border-3 ${isMoving ? 'border-danger animate-pulse shadow' : 'border-primary'}`} style={{ backgroundColor: '#fff', fontSize: '0.72rem', opacity: isMoving ? 0.8 : 1 }}>
                                                                             <div>
                                                                                 <div className="fw-bold text-primary mb-1" style={{ display: '-webkit-box', WebkitLineClamp: '2', WebkitBoxOrient: 'vertical', overflow: 'hidden', lineHeight: '1.2' }}>{s.thesis?.title}</div>
                                                                                 <div className="text-muted">
                                                                                     <div className="text-truncate">👤 <strong>{s.student?.name}</strong></div>
-                                                                                    <div className="d-flex flex-column gap-1 mt-1">
+                                                                                    <div className="d-flex flex-column gap-1 mt-1" onClick={(e) => e.stopPropagation()}>
                                                                                         <div className="text-muted small" style={{ fontSize: '0.7rem' }}>👨‍🏫 {s.supervisor?.name?.split(' ').pop() || "None"}</div>
                                                                                         <Dropdown size="sm">
                                                                                             <Dropdown.Toggle variant="link" className="p-0 text-decoration-none text-muted small" style={{ fontSize: '0.7rem' }}>🎯 {s.principal?.name?.split(' ').pop() || "None"}</Dropdown.Toggle>
-                                                                                            <Dropdown.Menu style={{ maxHeight: '200px', overflowY: 'auto' }}>
-                                                                                                {professors.map(p => <Dropdown.Item key={p._id} onClick={() => quickSwapProfessor(s._id, 'principal', p._id)} active={p._id === s.principal?._id}>{p.name}</Dropdown.Item>)}
+                                                                                            <Dropdown.Menu style={{ maxHeight: '350px', overflowY: 'auto', minWidth: '250px' }}>
+                                                                                                <div className="px-3 py-1 border-bottom bg-light sticky-top">
+                                                                                                    <Form.Control size="sm" placeholder="Search professor..." value={profSearch} onChange={(e) => setProfSearch(e.target.value)} onClick={(e) => e.stopPropagation()} />
+                                                                                                </div>
+                                                                                                {professors.filter(p => p.name.toLowerCase().includes(profSearch.toLowerCase())).map(p => <Dropdown.Item key={p._id} onClick={(e) => { e.stopPropagation(); quickSwapProfessor(s._id, 'principal', p._id); setProfSearch(''); }} active={p._id === s.principal?._id}>{p.name}</Dropdown.Item>)}
                                                                                             </Dropdown.Menu>
                                                                                         </Dropdown>
                                                                                         <Dropdown size="sm">
                                                                                             <Dropdown.Toggle variant="link" className="p-0 text-decoration-none text-muted small" style={{ fontSize: '0.7rem' }}>🔍 {s.examinator?.name?.split(' ').pop() || "None"}</Dropdown.Toggle>
-                                                                                            <Dropdown.Menu style={{ maxHeight: '200px', overflowY: 'auto' }}>
-                                                                                                {professors.map(p => <Dropdown.Item key={p._id} onClick={() => quickSwapProfessor(s._id, 'examinator', p._id)} active={p._id === s.examinator?._id}>{p.name}</Dropdown.Item>)}
+                                                                                            <Dropdown.Menu style={{ maxHeight: '350px', overflowY: 'auto', minWidth: '250px' }}>
+                                                                                                <div className="px-3 py-1 border-bottom bg-light sticky-top">
+                                                                                                    <Form.Control size="sm" placeholder="Search professor..." value={profSearch} onChange={(e) => setProfSearch(e.target.value)} onClick={(e) => e.stopPropagation()} />
+                                                                                                </div>
+                                                                                                {professors.filter(p => p.name.toLowerCase().includes(profSearch.toLowerCase())).map(p => <Dropdown.Item key={p._id} onClick={(e) => { e.stopPropagation(); quickSwapProfessor(s._id, 'examinator', p._id); setProfSearch(''); }} active={p._id === s.examinator?._id}>{p.name}</Dropdown.Item>)}
                                                                                             </Dropdown.Menu>
                                                                                         </Dropdown>
                                                                                     </div>
                                                                                 </div>
                                                                             </div>
-                                                                            <div className="d-flex gap-1 pt-1 mt-1 border-top align-items-center">
-                                                                                <Dropdown size="sm">
-                                                                                    <Dropdown.Toggle variant="outline-secondary" size="sm" className="border-0 px-1 py-0">🏢</Dropdown.Toggle>
-                                                                                    <Dropdown.Menu className="shadow border-0">
-                                                                                        {availableRooms.map(r => <Dropdown.Item key={r} onClick={() => quickUpdateRoom(s._id, r)} active={r === s.room}>{r}</Dropdown.Item>)}
-                                                                                    </Dropdown.Menu>
-                                                                                </Dropdown>
-                                                                                <ButtonGroup size="sm">
-                                                                                    <Button variant="outline-secondary" className="border-0 px-1 py-0" onClick={() => quickUpdateTime(s._id, -1)}>⬅️</Button>
-                                                                                    <Button variant="outline-secondary" className="border-0 px-1 py-0" onClick={() => quickUpdateTime(s._id, 1)}>➡️</Button>
-                                                                                </ButtonGroup>
-                                                                                <Button variant="outline-danger" size="sm" className="border-0 px-1 py-0 ms-auto" onClick={() => handleDelete(s._id)}>🗑️</Button>
+                                                                            <div className="d-flex gap-1 pt-1 mt-1 border-top align-items-center" onClick={(e) => e.stopPropagation()}>
+                                                                                <div className="small text-muted fw-bold">{isMoving ? "PICKED UP" : ""}</div>
+                                                                                <Button variant="outline-danger" size="sm" className="border-0 px-1 py-0 ms-auto" onClick={(e) => { e.stopPropagation(); handleDelete(s._id); }}>🗑️</Button>
                                                                             </div>
                                                                         </div>
-                                                                    ) : null}
+                                                                    ) : (
+                                                                        movingId && <div className="text-center text-success small fw-bold">CLICK TO MOVE HERE</div>
+                                                                    )}
                                                                 </td>
                                                             );
                                                         })}

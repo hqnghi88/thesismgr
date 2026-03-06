@@ -4,13 +4,13 @@ const User = require("../models/User");
 const xlsx = require("xlsx");
 const mongoose = require("mongoose");
 const { Document, Packer, Paragraph, Table, TableRow, TableCell, TextRun, AlignmentType, WidthType, BorderStyle, HeadingLevel, VerticalAlign, PageOrientation } = require("docx");
-const fs = require("fs");
 
-const getConflicts = async (startTime, room, principalId, examinatorId, supervisorId, excludeScheduleId = null) => {
+const getConflicts = async (startTime, room, principalId, examinatorId, supervisorId, excludeScheduleIds = []) => {
     try {
+        const excludeList = Array.isArray(excludeScheduleIds) ? excludeScheduleIds : [excludeScheduleIds];
         const query = {
             startTime,
-            _id: { $ne: excludeScheduleId }
+            _id: { $nin: excludeList.filter(id => id !== null) }
         };
 
         const existing = await Schedule.find(query);
@@ -47,9 +47,6 @@ const getConflicts = async (startTime, room, principalId, examinatorId, supervis
 
 const autoPlan = async (req, res) => {
     try {
-        console.log("Starting DETERMINISTIC Auto-Planning v5...");
-
-        // 1. Identify which theses need planning
         const scheduledThesisIds = await Schedule.find().distinct('thesis');
         const thesesToSchedule = await Thesis.find({
             _id: { $nin: scheduledThesisIds },
@@ -60,14 +57,14 @@ const autoPlan = async (req, res) => {
             return res.status(200).json({ message: "No theses to schedule.", scheduled: 0 });
         }
 
-        // 2. Identify professors - SORT BY NAME/ID TO REMOVE RANDOMNESS
-        // This ensures we always try to use the same subset of professors first (Minimizing Chaos)
-        const professors = await User.find({ role: 'professor' }).sort({ _id: 1 });
+        const professors = await User.find({
+            role: { $in: ['professor', 'admin'] }
+        }).sort({ name: 1 });
+
         if (professors.length < 3) {
-            return res.status(400).json({ message: "Not enough professors available." });
+            return res.status(400).json({ message: "Not enough staff members (Professor or Admin) available." });
         }
 
-        // 3. Group by Supervisor
         const supervisorGroups = {};
         thesesToSchedule.forEach(t => {
             const sId = t.supervisor?._id.toString();
@@ -75,10 +72,8 @@ const autoPlan = async (req, res) => {
             supervisorGroups[sId].push(t);
         });
 
-        // Sort supervisors by load (high to low)
         const sortedSIds = Object.keys(supervisorGroups).sort((a, b) => supervisorGroups[b].length - supervisorGroups[a].length);
 
-        // 4. Constants
         const { roomCount } = req.body;
         const defaultRooms = ["Room 110/DI", "Room 111/DI", "Room 112/DI", "Room 113/DI"];
         const rooms = roomCount ? defaultRooms.slice(0, parseInt(roomCount)) : defaultRooms;
@@ -86,9 +81,8 @@ const autoPlan = async (req, res) => {
         const afternoonSlots = ["13:30", "14:05", "14:40", "15:15", "15:50", "16:25"];
 
         let plannedCount = 0;
-        const TZ_OFFSET = 7; // Vietnam Time
+        const TZ_OFFSET = 7;
 
-        // 5. Execution Loop
         for (const sId of sortedSIds) {
             const theses = supervisorGroups[sId];
             let thesisIdx = 0;
@@ -99,41 +93,26 @@ const autoPlan = async (req, res) => {
                 const currentBatch = theses.slice(thesisIdx, thesisIdx + batchSize);
 
                 let placed = false;
-                let dayOffset = 1; // Start from tomorrow to ensure full shifts
+                let dayOffset = 1;
 
                 while (!placed && dayOffset < 30) {
                     const searchDay = new Date();
                     searchDay.setDate(searchDay.getDate() + dayOffset);
-                    searchDay.setUTCHours(0, 0, 0, 0); // Use UTC to avoid double-shifting
+                    searchDay.setUTCHours(0, 0, 0, 0);
 
                     searchLoop: for (const room of rooms) {
                         for (const shift of [morningSlots, afternoonSlots]) {
-
                             let availableSlots = [];
                             for (const slotStr of shift) {
                                 const st = new Date(searchDay);
                                 const [h, m] = slotStr.split(':');
-                                // Adjust to UTC to represent the local time correctly in the DB
                                 st.setUTCHours(parseInt(h) - TZ_OFFSET, parseInt(m), 0, 0);
-
-                                // Skip if slot is in the past
                                 if (st < new Date()) continue;
-
                                 const occupied = await Schedule.findOne({ startTime: st, room });
-                                if (!occupied) {
-                                    availableSlots.push(st);
-                                }
+                                if (!occupied) availableSlots.push(st);
                             }
 
-                            // We need exactly 'batchSize' contiguous/available slots? 
-                            // Actually, just 'batchSize' slots in the shift is enough for our requirements, 
-                            // provided we lock the committee. They don't have to be technically contiguous if there's a gap,
-                            // but usually they will be in an empty room.
-
                             if (availableSlots.length >= batchSize) {
-                                // Found valid space for the whole batch. 
-                                // Now pick 2 professors who are free for ALL of these specific slots.
-
                                 let busyProfIds = new Set();
                                 const slotsToUse = availableSlots.slice(0, batchSize);
 
@@ -146,19 +125,15 @@ const autoPlan = async (req, res) => {
                                     });
                                 }
 
-                                // Deterministic Selection: Always pick the first 2 available professors from our sorted list.
-                                // This satisfies: "Use as needed number", "Don't use all if not needed"
                                 const candidatePool = professors.filter(p => {
                                     const pid = p._id.toString();
                                     return pid !== sId && !busyProfIds.has(pid);
                                 });
 
                                 if (candidatePool.length >= 2) {
-                                    // Lock the committee
                                     const principalId = candidatePool[0]._id;
                                     const examinatorId = candidatePool[1]._id;
 
-                                    // Save the batch
                                     for (let i = 0; i < batchSize; i++) {
                                         const thesis = currentBatch[i];
                                         const startTime = slotsToUse[i];
@@ -176,7 +151,6 @@ const autoPlan = async (req, res) => {
                                             room
                                         });
                                         await newSched.save();
-
                                         thesis.status = 'scheduled';
                                         await thesis.save();
                                         plannedCount++;
@@ -190,18 +164,11 @@ const autoPlan = async (req, res) => {
                     }
                     dayOffset++;
                 }
-                if (!placed) {
-                    // Force break if we can't schedule this supervisor to avoid infinite loop
-                    console.error("Could not schedule for supervisor " + sId);
-                    break;
-                }
+                if (!placed) break;
             }
         }
 
-        res.status(201).json({
-            message: "Automatic planning completed with Deterministic Juries.",
-            scheduled: plannedCount
-        });
+        res.status(201).json({ message: "Automatic planning completed.", scheduled: plannedCount });
     } catch (error) {
         console.error("Auto-plan Error:", error);
         res.status(500).json({ message: "Server error during planning" });
@@ -211,14 +178,10 @@ const autoPlan = async (req, res) => {
 const getSchedules = async (req, res) => {
     try {
         const schedules = await Schedule.find()
-            .populate({
-                path: 'thesis',
-                populate: { path: 'student supervisor', select: 'name' }
-            })
+            .populate({ path: 'thesis', populate: { path: 'student supervisor', select: 'name' } })
             .populate('principal examinator supervisor student', 'name');
         res.status(200).json(schedules);
     } catch (error) {
-        console.error("Get Schedules Error:", error);
         res.status(500).json({ message: "Server error" });
     }
 };
@@ -227,10 +190,7 @@ const updateSchedule = async (req, res) => {
     try {
         const { principal, examinator, supervisor, startTime, endTime, room } = req.body;
         const schedule = await Schedule.findById(req.params.id);
-
-        if (!schedule) {
-            return res.status(404).json({ message: "Schedule not found" });
-        }
+        if (!schedule) return res.status(404).json({ message: "Schedule not found" });
 
         const newStartTime = startTime ? new Date(startTime) : schedule.startTime;
         const newRoom = room || schedule.room;
@@ -238,16 +198,11 @@ const updateSchedule = async (req, res) => {
         const newExaminator = examinator || schedule.examinator;
         const newSupervisor = supervisor || schedule.supervisor;
 
-        const pId = newPrincipal?.toString();
-        const eId = newExaminator?.toString();
-        const sId = newSupervisor?.toString();
-
-        if (pId === eId || pId === sId || eId === sId) {
+        if ([newPrincipal, newExaminator, newSupervisor].some((v, i, a) => a.indexOf(v) !== i)) {
             return res.status(400).json({ message: "All jury members must be different people." });
         }
 
-        const conflicts = await getConflicts(newStartTime, newRoom, newPrincipal, newExaminator, newSupervisor, req.params.id);
-
+        const conflicts = await getConflicts(newStartTime, newRoom, newPrincipal, newExaminator, newSupervisor, [req.params.id]);
         if (conflicts.room) return res.status(400).json({ message: `Room ${newRoom} is occupied.` });
         if (conflicts.profs.length > 0) return res.status(400).json({ message: "Professor conflict detected." });
 
@@ -261,7 +216,32 @@ const updateSchedule = async (req, res) => {
         await schedule.save();
         res.status(200).json({ message: "Updated successfully", schedule });
     } catch (error) {
-        console.error("Update Error:", error);
+        res.status(500).json({ message: "Server error" });
+    }
+};
+
+const swapSchedules = async (req, res) => {
+    try {
+        const { id1, id2 } = req.body;
+        const s1 = await Schedule.findById(id1);
+        const s2 = await Schedule.findById(id2);
+        if (!s1 || !s2) return res.status(404).json({ message: "One or both schedules not found" });
+
+        const temp = { startTime: s1.startTime, endTime: s1.endTime, room: s1.room };
+        s1.startTime = s2.startTime; s1.endTime = s2.endTime; s1.room = s2.room;
+        s2.startTime = temp.startTime; s2.endTime = temp.endTime; s2.room = temp.room;
+
+        const c1 = await getConflicts(s1.startTime, s1.room, s1.principal, s1.examinator, s1.supervisor, [id1, id2]);
+        const c2 = await getConflicts(s2.startTime, s2.room, s2.principal, s2.examinator, s2.supervisor, [id1, id2]);
+
+        if (c1.room || c1.profs.length > 0 || c2.room || c2.profs.length > 0) {
+            return res.status(400).json({ message: "Swap results in a conflict." });
+        }
+
+        await s1.save();
+        await s2.save();
+        res.status(200).json({ message: "Swapped successfully" });
+    } catch (error) {
         res.status(500).json({ message: "Server error" });
     }
 };
@@ -270,7 +250,6 @@ const deleteSchedule = async (req, res) => {
     try {
         const schedule = await Schedule.findById(req.params.id);
         if (!schedule) return res.status(404).json({ message: "Not found" });
-
         await Thesis.findByIdAndUpdate(schedule.thesis, { status: 'approved' });
         await Schedule.findByIdAndDelete(req.params.id);
         res.status(200).json({ message: "Deleted" });
@@ -279,28 +258,27 @@ const deleteSchedule = async (req, res) => {
     }
 };
 
+const deleteAllSchedules = async (req, res) => {
+    try {
+        await Schedule.deleteMany({});
+        await Thesis.updateMany({}, { status: 'approved' });
+        res.status(200).json({ message: "Cleared all" });
+    } catch (error) {
+        res.status(500).json({ message: "Server error" });
+    }
+};
+
 const exportSchedules = async (req, res) => {
     try {
-        const schedules = await Schedule.find()
-            .populate('thesis principal examinator supervisor student', 'name email title startTime');
-
-        if (schedules.length === 0) return res.status(404).json({ message: "No data" });
-
+        const schedules = await Schedule.find().populate('thesis principal examinator supervisor student');
         const rows = [["STT", "MSSV", "Họ tên SV", "Tên đề tài", "GVHD", "Giờ", "Hội đồng"]];
         schedules.forEach((s, i) => {
-            const studentId = s.student?.email?.split('@')[0].toUpperCase() || "";
-            const jury = `1. ${s.principal?.name}\n2. ${s.examinator?.name}\n3. ${s.supervisor?.name}`;
-            const time = new Date(s.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
-            rows.push([i + 1, studentId, s.student?.name || "", s.thesis?.title || "", s.supervisor?.name || "", time, jury]);
+            rows.push([i + 1, s.student?.email?.split('@')[0].toUpperCase(), s.student?.name, s.thesis?.title, s.supervisor?.name, new Date(s.startTime).toLocaleTimeString(), `1. ${s.principal?.name}\n2. ${s.examinator?.name}\n3. ${s.supervisor?.name}`]);
         });
-
         const wb = xlsx.utils.book_new();
         const ws = xlsx.utils.aoa_to_sheet(rows);
-        ws['!cols'] = [{ wch: 5 }, { wch: 10 }, { wch: 20 }, { wch: 50 }, { wch: 20 }, { wch: 10 }, { wch: 40 }];
         xlsx.utils.book_append_sheet(wb, ws, "Jury");
         const buf = xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' });
-
-        res.setHeader('Content-Disposition', 'attachment; filename="schedule.xlsx"');
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         res.send(buf);
     } catch (error) {
@@ -308,19 +286,9 @@ const exportSchedules = async (req, res) => {
     }
 };
 
-const deleteAllSchedules = async (req, res) => {
-    try {
-        await Schedule.deleteMany({});
-        await Thesis.updateMany({}, { status: 'approved' });
-        res.status(200).json({ message: "Cleared all planned schedules" });
-    } catch (error) {
-        console.error("Delete All Error:", error);
-        res.status(500).json({ message: "Server error" });
-    }
-};
-
 const exportDocx = async (req, res) => {
     try {
+        const { AlignmentType, WidthType, BorderStyle, VerticalAlign, PageOrientation } = require("docx");
         const schedules = await Schedule.find()
             .populate('thesis principal examinator supervisor student')
             .sort({ startTime: 1, room: 1 });
@@ -338,7 +306,6 @@ const exportDocx = async (req, res) => {
 
         const children = [];
 
-        // Header
         children.push(
             new Paragraph({
                 alignment: AlignmentType.CENTER,
@@ -391,7 +358,6 @@ const exportDocx = async (req, res) => {
 
                 groups[date][room].forEach((s, idx) => {
                     const timeStr = new Date(s.startTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }).replace(':', 'h');
-
                     tableRows.push(new TableRow({
                         children: [
                             new TableCell({ children: [new Paragraph({ text: (idx + 1).toString(), alignment: AlignmentType.CENTER })] }),
@@ -418,10 +384,7 @@ const exportDocx = async (req, res) => {
                 });
 
                 children.push(new Table({
-                    width: {
-                        size: 100,
-                        type: WidthType.PERCENTAGE,
-                    },
+                    width: { size: 100, type: WidthType.PERCENTAGE },
                     columnWidths: [600, 1200, 2000, 4800, 2000, 1000, 3000],
                     rows: tableRows,
                     borders: {
@@ -441,10 +404,7 @@ const exportDocx = async (req, res) => {
                 properties: {
                     page: {
                         margin: { top: 720, bottom: 720, left: 720, right: 720 },
-                        size: {
-                            width: 16838, // A4 Landscape width
-                            height: 11906, // A4 Landscape height
-                        },
+                        size: { width: 16838, height: 11906 },
                         orientation: PageOrientation.LANDSCAPE,
                     },
                 },
@@ -462,4 +422,4 @@ const exportDocx = async (req, res) => {
     }
 };
 
-module.exports = { autoPlan, getSchedules, updateSchedule, deleteSchedule, exportSchedules, exportDocx, deleteAllSchedules };
+module.exports = { autoPlan, getSchedules, updateSchedule, deleteSchedule, exportSchedules, exportDocx, deleteAllSchedules, swapSchedules };
