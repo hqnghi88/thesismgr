@@ -25,7 +25,7 @@ const NavigationBar = () => {
     <Navbar bg="primary" variant="dark" expand="lg" fixed="top" className="shadow-sm">
       <Container>
         <Navbar.Brand onClick={handleLogoClick} style={{ cursor: "pointer", fontWeight: "600" }}>
-          🎓 ThesisMgr
+          🎓 SE Thesis
         </Navbar.Brand>
         <Navbar.Toggle aria-controls="basic-navbar-nav" />
         <Navbar.Collapse id="basic-navbar-nav">

@@ -26,7 +26,9 @@ const Planning = () => {
         roomCount: 4
     });
     const [profSearch, setProfSearch] = useState('');
-    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+    const [juryClipboard, setJuryClipboard] = useState(null); // { principal, examinator }
+    const [selectedIds, setSelectedIds] = useState([]); // For bulk jury assignment
+    const [isDropdownSearching, setIsDropdownSearching] = useState(false);
     const token = localStorage.getItem("token");
 
     const fetchSchedules = async () => {
@@ -140,7 +142,7 @@ const Planning = () => {
     };
 
     const handleMoveOrSwap = async (targetId, targetTime, targetRoom) => {
-        if (isDropdownOpen) return;
+        if (isDropdownSearching) return;
         if (!movingId) {
             setMovingId(targetId);
             return;
@@ -207,6 +209,73 @@ const Planning = () => {
             fetchSchedules();
         } catch (err) {
             notify(err.response?.data?.message || "Error swapping professor");
+        }
+    };
+
+    const copyJury = (schedule) => {
+        if (!schedule.principal || !schedule.examinator) {
+            notify("Cannot copy: Jury members are missing");
+            return;
+        }
+        setJuryClipboard({
+            principal: schedule.principal,
+            examinator: schedule.examinator
+        });
+        // notify(`Copied Jury: ${schedule.principal.name} & ${schedule.examinator.name}`);
+    };
+
+    const pasteJury = async (scheduleId) => {
+        if (!juryClipboard) return;
+        try {
+            const schedule = schedules.find(s => s._id === scheduleId);
+            const updates = {
+                principal: juryClipboard.principal._id,
+                examinator: juryClipboard.examinator._id,
+                supervisor: schedule.supervisor?._id,
+                startTime: schedule.startTime,
+                endTime: schedule.endTime,
+                room: schedule.room
+            };
+
+            await axios.put(`${import.meta.env.VITE_API_URL}/api/schedule/${scheduleId}`, updates, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            fetchSchedules();
+        } catch (err) {
+            notify(err.response?.data?.message || "Error applying jury");
+        }
+    };
+
+    const toggleSelection = (e, id) => {
+        e.stopPropagation();
+        setSelectedIds(prev =>
+            prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+        );
+    };
+
+    const handleBulkJuryAssign = async (principalId, examinatorId) => {
+        if (selectedIds.length === 0) return;
+        setLoading(true);
+        try {
+            // Sequential updates to avoid DB lock issues on small server (or use Promise.all)
+            await Promise.all(selectedIds.map(id => {
+                const s = schedules.find(sched => sched._id === id);
+                return axios.put(`${import.meta.env.VITE_API_URL}/api/schedule/${id}`, {
+                    principal: principalId,
+                    examinator: examinatorId,
+                    supervisor: s.supervisor?._id,
+                    startTime: s.startTime,
+                    endTime: s.endTime,
+                    room: s.room
+                }, { headers: { Authorization: `Bearer ${token}` } });
+            }));
+            notify(`Successfully updated ${selectedIds.length} jury committees.`);
+            setSelectedIds([]);
+            fetchSchedules();
+        } catch (err) {
+            notify(err.response?.data?.message || "Error during bulk assignment");
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -369,6 +438,39 @@ const Planning = () => {
                     </ButtonGroup>
                 </div>
 
+                {/* Floating Bulk Action Bar */}
+                {selectedIds.length > 0 && viewMode === 'timetable' && (
+                    <div className="position-fixed bottom-0 start-50 translate-middle-x mb-4 z-3 shadow-lg w-75" style={{ transition: 'all 0.3s ease' }}>
+                        <Card className="rounded-pill border-primary border-2 shadow p-2 bg-white">
+                            <div className="d-flex align-items-center justify-content-between px-3">
+                                <div className="d-flex align-items-center gap-2">
+                                    <Badge bg="primary" className="rounded-pill px-3 py-2">{selectedIds.length} Selected</Badge>
+                                    <div className="vr mx-2"></div>
+                                    <span className="small fw-bold text-muted d-none d-md-inline">Bulk Actions:</span>
+                                </div>
+                                <div className="d-flex gap-2">
+                                    {juryClipboard ? (
+                                        <Button
+                                            variant="success"
+                                            size="sm"
+                                            className="rounded-pill px-4 fw-bold"
+                                            onClick={() => handleBulkJuryAssign(juryClipboard.principal._id, juryClipboard.examinator._id)}
+                                        >
+                                            ✅ Assign: {juryClipboard.principal.name.split(' ').pop()} + {juryClipboard.examinator.name.split(' ').pop()}
+                                        </Button>
+                                    ) : (
+                                        <div className="d-flex align-items-center px-3 py-1 bg-light rounded-pill border">
+                                            <span className="small text-muted fw-bold">1. 📋 Copy a jury first</span>
+                                        </div>
+                                    )}
+                                    <Button variant="outline-danger" size="sm" className="rounded-pill px-3" onClick={() => setSelectedIds([])}>Deselect All</Button>
+                                </div>
+                            </div>
+                        </Card>
+                    </div>
+                )}
+
+
                 <Card className="border-0 shadow-sm mb-4">
                     <Card.Body className="d-flex gap-2 flex-wrap">
                         <Button variant="success" onClick={() => setShowAutoPlanModal(true)} disabled={loading}>
@@ -467,44 +569,40 @@ const Planning = () => {
                                             <div className="d-flex justify-content-between mb-1"><strong>Room:</strong> <Badge bg="info">{schedule.room}</Badge></div>
                                             <div><strong>Start:</strong> {new Date(schedule.startTime).toLocaleString()}</div>
                                         </div>
-                                        <ListGroup variant="flush" className="small mb-3">
-                                            <ListGroup.Item className="px-0 py-1 border-0">👤 <strong>Student:</strong> {schedule.student?.name}</ListGroup.Item>
-                                            <ListGroup.Item className="px-0 py-1 border-0 d-flex align-items-center gap-1">
-                                                👨‍🏫 <strong>SV:</strong>
-                                                <span className="text-dark fw-normal">{schedule.supervisor?.name || "None"}</span>
-                                            </ListGroup.Item>
-                                            <ListGroup.Item className="px-0 py-1 border-0 d-flex align-items-center gap-1">
-                                                🎯 <strong>PR:</strong>
-                                                <Dropdown size="sm" onToggle={(isOpen) => { setIsDropdownOpen(isOpen); if (!isOpen) setProfSearch(''); }}>
+                                        <div className="d-flex flex-row flex-wrap gap-3 small mb-3 border-top pt-2 mt-2">
+                                            <div className="d-flex align-items-center gap-1">👤 <strong className="me-1">Std:</strong> {schedule.student?.name}</div>
+                                            <div className="d-flex align-items-center gap-1">👨‍🏫 <strong className="me-1">SV:</strong> {schedule.supervisor?.name || "None"}</div>
+                                            <div className="d-flex align-items-center gap-1">
+                                                🎯 <strong className="me-1">PR:</strong>
+                                                <Dropdown size="sm" onToggle={(isOpen) => { setIsDropdownSearching(isOpen); if (!isOpen) setProfSearch(''); }}>
                                                     <Dropdown.Toggle variant="link" className="p-0 text-decoration-none text-dark fw-normal">{schedule.principal?.name || "None"}</Dropdown.Toggle>
                                                     <Dropdown.Menu style={{ maxHeight: '250px', overflowY: 'auto' }}>
                                                         <div className="px-3 py-1 border-bottom bg-light sticky-top">
                                                             <Form.Control size="sm" placeholder="Search..." value={profSearch} onChange={(e) => setProfSearch(e.target.value)} onClick={(e) => e.stopPropagation()} />
                                                         </div>
-                                                        {professors.filter(p => p.name.toLowerCase().includes(profSearch.toLowerCase())).map(p => (
+                                                        {professors.filter(p => (p.name || '').toLowerCase().includes(profSearch.toLowerCase())).map(p => (
                                                             <Dropdown.Item key={p._id} onClick={(e) => { e.stopPropagation(); quickSwapProfessor(schedule._id, 'principal', p._id); }} active={p._id === schedule.principal?._id}>{p.name}</Dropdown.Item>
                                                         ))}
                                                     </Dropdown.Menu>
                                                 </Dropdown>
-                                            </ListGroup.Item>
-                                            <ListGroup.Item className="px-0 py-1 border-0 d-flex align-items-center gap-1">
-                                                🔍 <strong>EX:</strong>
-                                                <Dropdown size="sm" onToggle={(isOpen) => { setIsDropdownOpen(isOpen); if (!isOpen) setProfSearch(''); }}>
+                                            </div>
+                                            <div className="d-flex align-items-center gap-1">
+                                                🔍 <strong className="me-1">EX:</strong>
+                                                <Dropdown size="sm" onToggle={(isOpen) => { setIsDropdownSearching(isOpen); if (!isOpen) setProfSearch(''); }}>
                                                     <Dropdown.Toggle variant="link" className="p-0 text-decoration-none text-dark fw-normal">{schedule.examinator?.name || "None"}</Dropdown.Toggle>
                                                     <Dropdown.Menu style={{ maxHeight: '250px', overflowY: 'auto' }}>
                                                         <div className="px-3 py-1 border-bottom bg-light sticky-top">
                                                             <Form.Control size="sm" placeholder="Search..." value={profSearch} onChange={(e) => setProfSearch(e.target.value)} onClick={(e) => e.stopPropagation()} />
                                                         </div>
-                                                        {professors.filter(p => p.name.toLowerCase().includes(profSearch.toLowerCase())).map(p => (
+                                                        {professors.filter(p => (p.name || '').toLowerCase().includes(profSearch.toLowerCase())).map(p => (
                                                             <Dropdown.Item key={p._id} onClick={(e) => { e.stopPropagation(); quickSwapProfessor(schedule._id, 'examinator', p._id); }} active={p._id === schedule.examinator?._id}>{p.name}</Dropdown.Item>
                                                         ))}
                                                     </Dropdown.Menu>
                                                 </Dropdown>
-                                            </ListGroup.Item>
-                                        </ListGroup>
+                                            </div>
+                                        </div>
                                         <div className="d-flex gap-2">
                                             <Button variant="outline-primary" size="sm" onClick={() => handleEdit(schedule)}>✏️ Edit</Button>
-                                            <Button variant="outline-danger" size="sm" onClick={() => handleDelete(schedule._id)}>🗑️ Remove</Button>
                                         </div>
                                     </Card.Body>
                                 </Card>
@@ -550,29 +648,40 @@ const Planning = () => {
                                                                     onClick={() => handleMoveOrSwap(s?._id, slotDate.toISOString(), room)}
                                                                 >
                                                                     {s ? (
-                                                                        <div className={`text-start p-2 rounded h-100 d-flex flex-column justify-content-between shadow-sm border-start border-3 ${isMoving ? 'border-danger animate-pulse shadow' : 'border-primary'}`} style={{ backgroundColor: '#fff', fontSize: '0.72rem', opacity: isMoving ? 0.8 : 1 }}>
+                                                                        <div className={`text-start p-2 rounded h-100 d-flex flex-column justify-content-between shadow-sm border-start border-3 ${isMoving ? 'border-danger animate-pulse shadow' : 'border-primary'}`} style={{ backgroundColor: selectedIds.includes(s._id) ? '#eef6ff' : '#fff', fontSize: '0.72rem', opacity: isMoving ? 0.8 : 1 }}>
                                                                             <div>
-                                                                                <div className="fw-bold text-primary mb-1" style={{ display: '-webkit-box', WebkitLineClamp: '2', WebkitBoxOrient: 'vertical', overflow: 'hidden', lineHeight: '1.2' }}>{s.thesis?.title}</div>
+                                                                                <div className="d-flex justify-content-between align-items-start mb-1">
+                                                                                    <div className="fw-bold text-primary pe-2" style={{ display: '-webkit-box', WebkitLineClamp: '2', WebkitBoxOrient: 'vertical', overflow: 'hidden', lineHeight: '1.2' }}>{s.thesis?.title}</div>
+                                                                                    <input
+                                                                                        type="checkbox"
+                                                                                        checked={selectedIds.includes(s._id)}
+                                                                                        onChange={(e) => toggleSelection(e, s._id)}
+                                                                                        onClick={(e) => e.stopPropagation()}
+                                                                                        style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                                                                                    />
+                                                                                </div>
                                                                                 <div className="text-muted">
                                                                                     <div className="text-truncate">👤 <strong>{s.student?.name}</strong></div>
-                                                                                    <div className="d-flex flex-column gap-1 mt-1" onClick={(e) => e.stopPropagation()}>
-                                                                                        <div className="text-muted small" style={{ fontSize: '0.7rem' }}>👨‍🏫 {s.supervisor?.name?.split(' ').pop() || "None"}</div>
-                                                                                        <Dropdown size="sm" onToggle={(isOpen) => { setIsDropdownOpen(isOpen); if (!isOpen) setProfSearch(''); }}>
-                                                                                            <Dropdown.Toggle variant="link" className="p-0 text-decoration-none text-muted small" style={{ fontSize: '0.7rem' }}>🎯 {s.principal?.name?.split(' ').pop() || "None"}</Dropdown.Toggle>
+                                                                                    <div className="d-flex flex-row flex-wrap gap-2 mt-2 pt-1 border-top" onClick={(e) => e.stopPropagation()}>
+                                                                                        <div className="text-muted small ps-1" style={{ fontSize: '0.65rem' }}>👨‍🏫 {s.supervisor?.name?.split(' ').pop() || "None"}</div>
+                                                                                        <div className="vr opacity-25" style={{ height: '10px', marginTop: '3px' }}></div>
+                                                                                        <Dropdown size="sm" onToggle={(isOpen) => { setIsDropdownSearching(isOpen); if (!isOpen) setProfSearch(''); }}>
+                                                                                            <Dropdown.Toggle variant="link" className="p-0 text-decoration-none text-muted small" style={{ fontSize: '0.65rem' }}>🎯 {s.principal?.name?.split(' ').pop() || "None"}</Dropdown.Toggle>
                                                                                             <Dropdown.Menu style={{ maxHeight: '350px', overflowY: 'auto', minWidth: '250px' }}>
                                                                                                 <div className="px-3 py-1 border-bottom bg-light sticky-top">
-                                                                                                    <Form.Control size="sm" placeholder="Search professor..." value={profSearch} onChange={(e) => setProfSearch(e.target.value)} onClick={(e) => e.stopPropagation()} />
+                                                                                                    <Form.Control size="sm" placeholder="Search professor..." value={profSearch} onChange={(e) => setProfSearch(e.target.value)} onClick={(e) => e.stopPropagation()} autoFocus />
                                                                                                 </div>
-                                                                                                {professors.filter(p => p.name.toLowerCase().includes(profSearch.toLowerCase())).map(p => <Dropdown.Item key={p._id} onClick={(e) => { e.stopPropagation(); quickSwapProfessor(s._id, 'principal', p._id); }} active={p._id === s.principal?._id}>{p.name}</Dropdown.Item>)}
+                                                                                                {professors.filter(p => (p.name || '').toLowerCase().includes(profSearch.toLowerCase())).map(p => <Dropdown.Item key={p._id} onClick={(e) => { e.stopPropagation(); quickSwapProfessor(s._id, 'principal', p._id); setProfSearch(''); }} active={p._id === s.principal?._id}>{p.name}</Dropdown.Item>)}
                                                                                             </Dropdown.Menu>
                                                                                         </Dropdown>
-                                                                                        <Dropdown size="sm" onToggle={(isOpen) => { setIsDropdownOpen(isOpen); if (!isOpen) setProfSearch(''); }}>
-                                                                                            <Dropdown.Toggle variant="link" className="p-0 text-decoration-none text-muted small" style={{ fontSize: '0.7rem' }}>🔍 {s.examinator?.name?.split(' ').pop() || "None"}</Dropdown.Toggle>
+                                                                                        <div className="vr opacity-25" style={{ height: '10px', marginTop: '3px' }}></div>
+                                                                                        <Dropdown size="sm" onToggle={(isOpen) => { setIsDropdownSearching(isOpen); if (!isOpen) setProfSearch(''); }}>
+                                                                                            <Dropdown.Toggle variant="link" className="p-0 text-decoration-none text-muted small" style={{ fontSize: '0.65rem' }}>🔍 {s.examinator?.name?.split(' ').pop() || "None"}</Dropdown.Toggle>
                                                                                             <Dropdown.Menu style={{ maxHeight: '350px', overflowY: 'auto', minWidth: '250px' }}>
                                                                                                 <div className="px-3 py-1 border-bottom bg-light sticky-top">
-                                                                                                    <Form.Control size="sm" placeholder="Search professor..." value={profSearch} onChange={(e) => setProfSearch(e.target.value)} onClick={(e) => e.stopPropagation()} />
+                                                                                                    <Form.Control size="sm" placeholder="Search professor..." value={profSearch} onChange={(e) => setProfSearch(e.target.value)} onClick={(e) => e.stopPropagation()} autoFocus />
                                                                                                 </div>
-                                                                                                {professors.filter(p => p.name.toLowerCase().includes(profSearch.toLowerCase())).map(p => <Dropdown.Item key={p._id} onClick={(e) => { e.stopPropagation(); quickSwapProfessor(s._id, 'examinator', p._id); }} active={p._id === s.examinator?._id}>{p.name}</Dropdown.Item>)}
+                                                                                                {professors.filter(p => (p.name || '').toLowerCase().includes(profSearch.toLowerCase())).map(p => <Dropdown.Item key={p._id} onClick={(e) => { e.stopPropagation(); quickSwapProfessor(s._id, 'examinator', p._id); setProfSearch(''); }} active={p._id === s.examinator?._id}>{p.name}</Dropdown.Item>)}
                                                                                             </Dropdown.Menu>
                                                                                         </Dropdown>
                                                                                     </div>
@@ -580,7 +689,9 @@ const Planning = () => {
                                                                             </div>
                                                                             <div className="d-flex gap-1 pt-1 mt-1 border-top align-items-center" onClick={(e) => e.stopPropagation()}>
                                                                                 <div className="small text-muted fw-bold">{isMoving ? "PICKED UP" : ""}</div>
-                                                                                <Button variant="outline-danger" size="sm" className="border-0 px-1 py-0 ms-auto" onClick={(e) => { e.stopPropagation(); handleDelete(s._id); }}>🗑️</Button>
+                                                                                <div className="ms-auto d-flex gap-1">
+                                                                                    <Button variant="outline-secondary" size="sm" className="border-0 px-2 py-0" style={{ fontSize: '0.6rem' }} onClick={(e) => { e.stopPropagation(); copyJury(s); }}>📋 Copy Jury</Button>
+                                                                                </div>
                                                                             </div>
                                                                         </div>
                                                                     ) : (
