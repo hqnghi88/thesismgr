@@ -182,12 +182,16 @@ const getSchedules = async (req, res) => {
             .populate('principal examinator supervisor student', 'name');
         res.status(200).json(schedules);
     } catch (error) {
-        res.status(500).json({ message: "Server error" });
+        console.error("getSchedules Error:", error);
+        res.status(500).json({ message: "Server error in getSchedules" });
     }
 };
 
 const updateSchedule = async (req, res) => {
     try {
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+            return res.status(400).json({ message: "Invalid schedule ID format" });
+        }
         const { principal, examinator, supervisor, startTime, endTime, room } = req.body;
         const schedule = await Schedule.findById(req.params.id);
         if (!schedule) return res.status(404).json({ message: "Schedule not found" });
@@ -216,7 +220,8 @@ const updateSchedule = async (req, res) => {
         await schedule.save();
         res.status(200).json({ message: "Updated successfully", schedule });
     } catch (error) {
-        res.status(500).json({ message: "Server error" });
+        console.error("updateSchedule Error:", error);
+        res.status(500).json({ message: "Server error in updateSchedule" });
     }
 };
 
@@ -242,19 +247,24 @@ const swapSchedules = async (req, res) => {
         await s2.save();
         res.status(200).json({ message: "Swapped successfully" });
     } catch (error) {
-        res.status(500).json({ message: "Server error" });
+        console.error("swapSchedules Error:", error);
+        res.status(500).json({ message: "Server error in swapSchedules" });
     }
 };
 
 const deleteSchedule = async (req, res) => {
     try {
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+            return res.status(400).json({ message: "Invalid schedule ID format" });
+        }
         const schedule = await Schedule.findById(req.params.id);
         if (!schedule) return res.status(404).json({ message: "Not found" });
         await Thesis.findByIdAndUpdate(schedule.thesis, { status: 'approved' });
         await Schedule.findByIdAndDelete(req.params.id);
         res.status(200).json({ message: "Deleted" });
     } catch (error) {
-        res.status(500).json({ message: "Server error" });
+        console.error("deleteSchedule Error:", error);
+        res.status(500).json({ message: "Server error in deleteSchedule" });
     }
 };
 

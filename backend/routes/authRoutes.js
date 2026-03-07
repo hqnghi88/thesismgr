@@ -20,16 +20,6 @@ router.put('/users/:id/role', authMiddleware, adminMiddleware, updateUserRole);
 router.delete('/users/:id', authMiddleware, adminMiddleware, deleteUser);
 router.delete('/users/role/:role', authMiddleware, adminMiddleware, deleteUsersByRole);
 
-// Schedule Routes
-const { autoPlan, getSchedules, updateSchedule, deleteSchedule, exportSchedules, exportDocx, deleteAllSchedules, swapSchedules } = require("../controllers/scheduleController");
-router.post('/schedule/auto-plan', authMiddleware, adminMiddleware, autoPlan);
-router.get('/schedules', authMiddleware, getSchedules);
-router.put('/schedule/:id', authMiddleware, adminMiddleware, updateSchedule);
-router.post('/schedule/swap', authMiddleware, adminMiddleware, swapSchedules);
-router.delete('/schedule/:id', authMiddleware, adminMiddleware, deleteSchedule);
-router.delete('/schedule/all', authMiddleware, adminMiddleware, deleteAllSchedules);
-router.get('/schedule/export', authMiddleware, adminMiddleware, exportSchedules);
-router.get('/schedule/export-docx', authMiddleware, adminMiddleware, exportDocx);
 
 
 router.get('/dashboard', authMiddleware, (req, res) => {
