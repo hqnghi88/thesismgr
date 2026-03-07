@@ -260,20 +260,32 @@ const deleteSchedule = async (req, res) => {
 
 const deleteAllSchedules = async (req, res) => {
     try {
-        const [deleteResult, updateResult] = await Promise.all([
-            Schedule.deleteMany({}),
-            Thesis.updateMany({ status: 'scheduled' }, { $set: { status: 'approved' } })
-        ]);
-        
-        console.log(`Deleted ${deleteResult.deletedCount} schedules and reset ${updateResult.modifiedCount} theses.`);
-        
-        res.status(200).json({ 
+        console.log("Admin clearing all schedules...");
+
+        // 1. Delete all schedule records
+        const deleteResult = await Schedule.deleteMany({});
+        console.log(`Deleted ${deleteResult.deletedCount || 0} schedules.`);
+
+        // 2. Reset all 'scheduled' theses to 'approved'
+        const updateResult = await Thesis.updateMany(
+            { status: 'scheduled' },
+            { $set: { status: 'approved' } }
+        );
+        console.log(`Reset ${updateResult.modifiedCount || 0} theses from 'scheduled' to 'approved'.`);
+
+        res.status(200).json({
             message: "Successfully cleared all schedules.",
-            details: `Deleted: ${deleteResult.deletedCount}, Reset: ${updateResult.modifiedCount}`
+            details: {
+                deletedCount: deleteResult.deletedCount || 0,
+                updatedCount: updateResult.modifiedCount || 0
+            }
         });
     } catch (error) {
         console.error("Delete All Schedules Error:", error);
-        res.status(500).json({ message: `Server error: ${error.message}` });
+        res.status(500).json({
+            message: "Failed to clear schedules",
+            error: error.message
+        });
     }
 };
 
