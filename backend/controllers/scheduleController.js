@@ -327,9 +327,10 @@ const exportDocx = async (req, res) => {
         if (schedules.length === 0) return res.status(404).json({ message: "No data to export" });
 
         const groups = {};
+        const TZ_OFFSET_MS = 7 * 60 * 60 * 1000;
         schedules.forEach(s => {
-            const d = new Date(s.startTime);
-            const dateStr = d.toLocaleDateString('vi-VN');
+            const d = new Date(new Date(s.startTime).getTime() + TZ_OFFSET_MS);
+            const dateStr = d.toLocaleDateString('vi-VN', { timeZone: 'UTC' });
             if (!groups[dateStr]) groups[dateStr] = {};
             if (!groups[dateStr][s.room]) groups[dateStr][s.room] = [];
             groups[dateStr][s.room].push(s);
@@ -388,7 +389,8 @@ const exportDocx = async (req, res) => {
                 ];
 
                 groups[date][room].forEach((s, idx) => {
-                    const timeStr = new Date(s.startTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }).replace(':', 'h');
+                    const localTime = new Date(new Date(s.startTime).getTime() + TZ_OFFSET_MS);
+                    const timeStr = localTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' }).replace(':', 'h');
                     tableRows.push(new TableRow({
                         children: [
                             new TableCell({ children: [new Paragraph({ text: (idx + 1).toString(), alignment: AlignmentType.CENTER })] }),

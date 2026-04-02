@@ -648,50 +648,60 @@ const Planning = () => {
                                                                     onClick={() => handleMoveOrSwap(s?._id, slotDate.toISOString(), room)}
                                                                 >
                                                                     {s ? (
-                                                                        <div className={`text-start p-2 rounded h-100 d-flex flex-column justify-content-between shadow-sm border-start border-3 ${isMoving ? 'border-danger animate-pulse shadow' : 'border-primary'}`} style={{ backgroundColor: selectedIds.includes(s._id) ? '#eef6ff' : '#fff', fontSize: '0.72rem', opacity: isMoving ? 0.8 : 1 }}>
-                                                                            <div>
-                                                                                <div className="d-flex justify-content-between align-items-start mb-1">
-                                                                                    <div className="fw-bold text-primary pe-2" style={{ display: '-webkit-box', WebkitLineClamp: '2', WebkitBoxOrient: 'vertical', overflow: 'hidden', lineHeight: '1.2' }}>{s.thesis?.title}</div>
-                                                                                    <input
-                                                                                        type="checkbox"
-                                                                                        checked={selectedIds.includes(s._id)}
-                                                                                        onChange={(e) => toggleSelection(e, s._id)}
-                                                                                        onClick={(e) => e.stopPropagation()}
-                                                                                        style={{ width: '16px', height: '16px', cursor: 'pointer' }}
-                                                                                    />
-                                                                                </div>
-                                                                                <div className="text-muted">
-                                                                                    <div className="text-truncate">👤 <strong>{s.student?.name}</strong></div>
-                                                                                    <div className="d-flex flex-row flex-wrap gap-2 mt-2 pt-1 border-top" onClick={(e) => e.stopPropagation()}>
-                                                                                        <div className="text-muted small ps-1" style={{ fontSize: '0.65rem' }}>👨‍🏫 {s.supervisor?.name?.split(' ').pop() || "None"}</div>
-                                                                                        <div className="vr opacity-25" style={{ height: '10px', marginTop: '3px' }}></div>
-                                                                                        <Dropdown size="sm" onToggle={(isOpen) => { setIsDropdownSearching(isOpen); if (!isOpen) setProfSearch(''); }}>
-                                                                                            <Dropdown.Toggle variant="link" className="p-0 text-decoration-none text-muted small" style={{ fontSize: '0.65rem' }}>🎯 {s.principal?.name?.split(' ').pop() || "None"}</Dropdown.Toggle>
-                                                                                            <Dropdown.Menu style={{ maxHeight: '350px', overflowY: 'auto', minWidth: '250px' }}>
-                                                                                                <div className="px-3 py-1 border-bottom bg-light sticky-top">
-                                                                                                    <Form.Control size="sm" placeholder="Search professor..." value={profSearch} onChange={(e) => setProfSearch(e.target.value)} onClick={(e) => e.stopPropagation()} autoFocus />
-                                                                                                </div>
-                                                                                                {professors.filter(p => (p.name || '').toLowerCase().includes(profSearch.toLowerCase())).map(p => <Dropdown.Item key={p._id} onClick={(e) => { e.stopPropagation(); quickSwapProfessor(s._id, 'principal', p._id); setProfSearch(''); }} active={p._id === s.principal?._id}>{p.name}</Dropdown.Item>)}
-                                                                                            </Dropdown.Menu>
-                                                                                        </Dropdown>
-                                                                                        <div className="vr opacity-25" style={{ height: '10px', marginTop: '3px' }}></div>
-                                                                                        <Dropdown size="sm" onToggle={(isOpen) => { setIsDropdownSearching(isOpen); if (!isOpen) setProfSearch(''); }}>
-                                                                                            <Dropdown.Toggle variant="link" className="p-0 text-decoration-none text-muted small" style={{ fontSize: '0.65rem' }}>🔍 {s.examinator?.name?.split(' ').pop() || "None"}</Dropdown.Toggle>
-                                                                                            <Dropdown.Menu style={{ maxHeight: '350px', overflowY: 'auto', minWidth: '250px' }}>
-                                                                                                <div className="px-3 py-1 border-bottom bg-light sticky-top">
-                                                                                                    <Form.Control size="sm" placeholder="Search professor..." value={profSearch} onChange={(e) => setProfSearch(e.target.value)} onClick={(e) => e.stopPropagation()} autoFocus />
-                                                                                                </div>
-                                                                                                {professors.filter(p => (p.name || '').toLowerCase().includes(profSearch.toLowerCase())).map(p => <Dropdown.Item key={p._id} onClick={(e) => { e.stopPropagation(); quickSwapProfessor(s._id, 'examinator', p._id); setProfSearch(''); }} active={p._id === s.examinator?._id}>{p.name}</Dropdown.Item>)}
-                                                                                            </Dropdown.Menu>
-                                                                                        </Dropdown>
-                                                                                    </div>
-                                                                                </div>
+                                                                        <div className={`text-start p-1 rounded h-100 d-flex flex-column shadow-sm border-start border-3 ${isMoving ? 'border-danger animate-pulse shadow' : 'border-primary'}`} style={{ backgroundColor: selectedIds.includes(s._id) ? '#eef6ff' : '#fff', opacity: isMoving ? 0.8 : 1 }}>
+                                                                            {/* Tiny header: title + checkbox */}
+                                                                            <div className="d-flex justify-content-between align-items-start mb-1 gap-1">
+                                                                                <div className="text-muted fw-semibold" style={{ fontSize: '0.72rem', lineHeight: '1.3', flex: 1, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }} title={s.thesis?.title}>{s.thesis?.title}</div>
+                                                                                <input
+                                                                                    type="checkbox"
+                                                                                    checked={selectedIds.includes(s._id)}
+                                                                                    onChange={(e) => toggleSelection(e, s._id)}
+                                                                                    onClick={(e) => e.stopPropagation()}
+                                                                                    style={{ width: '14px', height: '14px', cursor: 'pointer', flexShrink: 0 }}
+                                                                                />
                                                                             </div>
-                                                                            <div className="d-flex gap-1 pt-1 mt-1 border-top align-items-center" onClick={(e) => e.stopPropagation()}>
-                                                                                <div className="small text-muted fw-bold">{isMoving ? "PICKED UP" : ""}</div>
-                                                                                <div className="ms-auto d-flex gap-1">
-                                                                                    <Button variant="outline-secondary" size="sm" className="border-0 px-2 py-0" style={{ fontSize: '0.6rem' }} onClick={(e) => { e.stopPropagation(); copyJury(s); }}>📋 Copy Jury</Button>
+                                                                            {/* Student */}
+                                                                            <div className="text-truncate fw-semibold text-dark mb-1" style={{ fontSize: '0.68rem' }}>👤 {s.student?.name}</div>
+                                                                            {/* Jury rows — BIG & clickable */}
+                                                                            <div className="d-flex flex-column gap-1 mt-auto border-top pt-1" onClick={(e) => e.stopPropagation()}>
+                                                                                {/* Supervisor — read-only */}
+                                                                                <div className="d-flex align-items-center gap-1 px-1 py-1 rounded" style={{ backgroundColor: '#f0fdf4' }}>
+                                                                                    <span style={{ fontSize: '0.7rem', color: '#16a34a', fontWeight: 700, minWidth: '22px' }}>SV</span>
+                                                                                    <span className="fw-bold text-success text-truncate" style={{ fontSize: '0.92rem' }}>{s.supervisor?.name?.split(' ').pop() || <span className="text-danger">⚠️</span>}</span>
                                                                                 </div>
+                                                                                {/* Principal — clickable dropdown */}
+                                                                                <Dropdown onToggle={(isOpen) => { setIsDropdownSearching(isOpen); if (!isOpen) setProfSearch(''); }}>
+                                                                                    <Dropdown.Toggle as="div" className="d-flex align-items-center gap-1 px-1 py-1 rounded" style={{ backgroundColor: '#eff6ff', cursor: 'pointer' }}>
+                                                                                        <span style={{ fontSize: '0.7rem', color: '#1d4ed8', fontWeight: 700, minWidth: '22px' }}>PR</span>
+                                                                                        <span className="fw-bold text-primary text-truncate" style={{ fontSize: '0.92rem' }}>{s.principal?.name?.split(' ').pop() || <span className="text-danger">⚠️</span>}</span>
+                                                                                        <span className="ms-auto text-muted" style={{ fontSize: '0.65rem' }}>▾</span>
+                                                                                    </Dropdown.Toggle>
+                                                                                    <Dropdown.Menu style={{ maxHeight: '350px', overflowY: 'auto', minWidth: '250px' }}>
+                                                                                        <div className="px-3 py-1 border-bottom bg-light sticky-top">
+                                                                                            <Form.Control size="sm" placeholder="Search professor..." value={profSearch} onChange={(e) => setProfSearch(e.target.value)} onClick={(e) => e.stopPropagation()} autoFocus />
+                                                                                        </div>
+                                                                                        {professors.filter(p => (p.name || '').toLowerCase().includes(profSearch.toLowerCase())).map(p => <Dropdown.Item key={p._id} onClick={(e) => { e.stopPropagation(); quickSwapProfessor(s._id, 'principal', p._id); setProfSearch(''); }} active={p._id === s.principal?._id}>{p.name}</Dropdown.Item>)}
+                                                                                    </Dropdown.Menu>
+                                                                                </Dropdown>
+                                                                                {/* Examinator — clickable dropdown */}
+                                                                                <Dropdown onToggle={(isOpen) => { setIsDropdownSearching(isOpen); if (!isOpen) setProfSearch(''); }}>
+                                                                                    <Dropdown.Toggle as="div" className="d-flex align-items-center gap-1 px-1 py-1 rounded" style={{ backgroundColor: '#faf5ff', cursor: 'pointer' }}>
+                                                                                        <span style={{ fontSize: '0.7rem', color: '#7c3aed', fontWeight: 700, minWidth: '22px' }}>EX</span>
+                                                                                        <span className="fw-bold text-truncate" style={{ fontSize: '0.92rem', color: '#7c3aed' }}>{s.examinator?.name?.split(' ').pop() || <span className="text-danger">⚠️</span>}</span>
+                                                                                        <span className="ms-auto text-muted" style={{ fontSize: '0.65rem' }}>▾</span>
+                                                                                    </Dropdown.Toggle>
+                                                                                    <Dropdown.Menu style={{ maxHeight: '350px', overflowY: 'auto', minWidth: '250px' }}>
+                                                                                        <div className="px-3 py-1 border-bottom bg-light sticky-top">
+                                                                                            <Form.Control size="sm" placeholder="Search professor..." value={profSearch} onChange={(e) => setProfSearch(e.target.value)} onClick={(e) => e.stopPropagation()} autoFocus />
+                                                                                        </div>
+                                                                                        {professors.filter(p => (p.name || '').toLowerCase().includes(profSearch.toLowerCase())).map(p => <Dropdown.Item key={p._id} onClick={(e) => { e.stopPropagation(); quickSwapProfessor(s._id, 'examinator', p._id); setProfSearch(''); }} active={p._id === s.examinator?._id}>{p.name}</Dropdown.Item>)}
+                                                                                    </Dropdown.Menu>
+                                                                                </Dropdown>
+                                                                            </div>
+                                                                            {/* Footer */}
+                                                                            <div className="d-flex align-items-center pt-1 mt-1 border-top" onClick={(e) => e.stopPropagation()}>
+                                                                                {isMoving && <span className="small text-danger fw-bold">PICKED UP</span>}
+                                                                                <Button variant="outline-secondary" size="sm" className="border-0 px-1 py-0 ms-auto" style={{ fontSize: '0.6rem' }} onClick={(e) => { e.stopPropagation(); copyJury(s); }}>📋 Copy</Button>
                                                                             </div>
                                                                         </div>
                                                                     ) : (
