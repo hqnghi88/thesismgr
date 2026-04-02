@@ -74,11 +74,25 @@ const autoPlan = async (req, res) => {
 
         const sortedSIds = Object.keys(supervisorGroups).sort((a, b) => supervisorGroups[b].length - supervisorGroups[a].length);
 
-        const { roomCount, startDate } = req.body;
+        const { roomCount, startDate, slotsPerDay = 14 } = req.body;
         const defaultRooms = ["Room 110/DI", "Room 111/DI", "Room 112/DI", "Room 113/DI"];
         const rooms = roomCount ? defaultRooms.slice(0, parseInt(roomCount)) : defaultRooms;
-        const morningSlots = ["07:15", "07:50", "08:25", "09:00", "09:35", "10:10"];
-        const afternoonSlots = ["13:30", "14:05", "14:40", "15:15", "15:50", "16:25"];
+
+        const slotsPerSession = Math.floor(slotsPerDay / 2);
+        const generateTimeSlots = (startH, startM, count) => {
+            const result = [];
+            let totalM = startH * 60 + startM;
+            for (let i = 0; i < count; i++) {
+                const h = Math.floor(totalM / 60).toString().padStart(2, '0');
+                const m = (totalM % 60).toString().padStart(2, '0');
+                result.push(`${h}:${m}`);
+                totalM += 35; // Each slot is 35 minutes
+            }
+            return result;
+        };
+
+        const morningSlots = generateTimeSlots(7, 15, slotsPerSession);
+        const afternoonSlots = generateTimeSlots(13, 30, slotsPerSession);
 
         // Anchor day: use provided startDate (YYYY-MM-DD local) or today
         const anchorDay = startDate ? new Date(startDate) : new Date();
@@ -93,7 +107,7 @@ const autoPlan = async (req, res) => {
 
             while (thesisIdx < theses.length) {
                 const remaining = theses.length - thesisIdx;
-                const batchSize = Math.min(remaining, 6);
+                const batchSize = Math.min(remaining, slotsPerSession);
                 const currentBatch = theses.slice(thesisIdx, thesisIdx + batchSize);
 
                 let placed = false;

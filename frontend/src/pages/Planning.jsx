@@ -24,7 +24,8 @@ const Planning = () => {
     const availableRooms = ["Room 110/DI", "Room 111/DI", "Room 112/DI", "Room 113/DI"];
     const [autoPlanParams, setAutoPlanParams] = useState({
         roomCount: 4,
-        startDate: new Date().toISOString().slice(0, 10) // default to today
+        startDate: new Date().toISOString().slice(0, 10), // default to today
+        slotsPerDay: 14
     });
     const [profSearch, setProfSearch] = useState('');
     const [juryClipboard, setJuryClipboard] = useState(null); // { principal, examinator }
@@ -391,8 +392,8 @@ const Planning = () => {
     }, []);
 
     const generateTimetable = () => {
-        const morningSlots = ["07:15", "07:50", "08:25", "09:00", "09:35", "10:10"];
-        const afternoonSlots = ["13:30", "14:05", "14:40", "15:15", "15:50", "16:25"];
+        const morningSlots = ["07:15", "07:50", "08:25", "09:00", "09:35", "10:10", "10:45"];
+        const afternoonSlots = ["13:30", "14:05", "14:40", "15:15", "15:50", "16:25", "17:00"];
         const allStandardTimeSlots = [...morningSlots, ...afternoonSlots];
 
         const dates = [...new Set(schedules.map(s => {
@@ -572,6 +573,21 @@ const Planning = () => {
                             </Form.Select>
                             <Form.Text className="text-muted">
                                 Limiting rooms will spread the defense schedule across more days.
+                            </Form.Text>
+                        </Form.Group>
+                        <Form.Group className="mb-3">
+                            <Form.Label className="fw-semibold">Slots per Day</Form.Label>
+                            <Form.Select
+                                value={autoPlanParams.slotsPerDay}
+                                onChange={(e) => setAutoPlanParams({ ...autoPlanParams, slotsPerDay: parseInt(e.target.value) })}
+                            >
+                                <option value={8}>8 Slots (4 morning, 4 afternoon)</option>
+                                <option value={10}>10 Slots (5 morning, 5 afternoon)</option>
+                                <option value={12}>12 Slots (6 morning, 6 afternoon)</option>
+                                <option value={14}>14 Slots (7 morning, 7 afternoon)</option>
+                            </Form.Select>
+                            <Form.Text className="text-muted">
+                                Total defense slots available per room each day.
                             </Form.Text>
                         </Form.Group>
                     </Modal.Body>
