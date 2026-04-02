@@ -23,7 +23,8 @@ const Planning = () => {
     const [movingId, setMovingId] = useState(null);
     const availableRooms = ["Room 110/DI", "Room 111/DI", "Room 112/DI", "Room 113/DI"];
     const [autoPlanParams, setAutoPlanParams] = useState({
-        roomCount: 4
+        roomCount: 4,
+        startDate: new Date().toISOString().slice(0, 10) // default to today
     });
     const [profSearch, setProfSearch] = useState('');
     const [juryClipboard, setJuryClipboard] = useState(null); // { principal, examinator }
@@ -546,6 +547,18 @@ const Planning = () => {
                         <Modal.Title>🤖 Auto-Planning Configuration</Modal.Title>
                     </Modal.Header>
                     <Modal.Body>
+                        <Form.Group className="mb-3">
+                            <Form.Label className="fw-semibold">📅 Start Date for Planning</Form.Label>
+                            <Form.Control
+                                type="date"
+                                value={autoPlanParams.startDate}
+                                min={new Date().toISOString().slice(0, 10)}
+                                onChange={(e) => setAutoPlanParams({ ...autoPlanParams, startDate: e.target.value })}
+                            />
+                            <Form.Text className="text-muted">
+                                Defenses will be scheduled from this date onwards.
+                            </Form.Text>
+                        </Form.Group>
                         <Form.Group className="mb-3">
                             <Form.Label className="fw-semibold">Number of Rooms to Use</Form.Label>
                             <Form.Select

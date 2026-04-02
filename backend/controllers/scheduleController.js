@@ -74,11 +74,15 @@ const autoPlan = async (req, res) => {
 
         const sortedSIds = Object.keys(supervisorGroups).sort((a, b) => supervisorGroups[b].length - supervisorGroups[a].length);
 
-        const { roomCount } = req.body;
+        const { roomCount, startDate } = req.body;
         const defaultRooms = ["Room 110/DI", "Room 111/DI", "Room 112/DI", "Room 113/DI"];
         const rooms = roomCount ? defaultRooms.slice(0, parseInt(roomCount)) : defaultRooms;
         const morningSlots = ["07:15", "07:50", "08:25", "09:00", "09:35", "10:10"];
         const afternoonSlots = ["13:30", "14:05", "14:40", "15:15", "15:50", "16:25"];
+
+        // Anchor day: use provided startDate (YYYY-MM-DD local) or today
+        const anchorDay = startDate ? new Date(startDate) : new Date();
+        anchorDay.setUTCHours(0, 0, 0, 0);
 
         let plannedCount = 0;
         const TZ_OFFSET = 7;
@@ -93,11 +97,11 @@ const autoPlan = async (req, res) => {
                 const currentBatch = theses.slice(thesisIdx, thesisIdx + batchSize);
 
                 let placed = false;
-                let dayOffset = 1;
+                let dayOffset = 0;
 
-                while (!placed && dayOffset < 30) {
-                    const searchDay = new Date();
-                    searchDay.setDate(searchDay.getDate() + dayOffset);
+                while (!placed && dayOffset < 60) {
+                    const searchDay = new Date(anchorDay);
+                    searchDay.setDate(anchorDay.getDate() + dayOffset);
                     searchDay.setUTCHours(0, 0, 0, 0);
 
                     searchLoop: for (const room of rooms) {
