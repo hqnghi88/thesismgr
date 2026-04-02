@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { autoPlan, getSchedules, updateSchedule, deleteSchedule, exportSchedules, exportDocx, deleteAllSchedules, swapSchedules } = require("../controllers/scheduleController");
+const { autoPlan, getSchedules, updateSchedule, deleteSchedule, exportSchedules, exportDocx, deleteAllSchedules, swapSchedules, checkAllConflicts } = require("../controllers/scheduleController");
 const authMiddleware = require("../middleware/authMiddleware");
 const adminMiddleware = require("../middleware/adminMiddleware");
 
@@ -12,5 +12,6 @@ router.delete("/schedule/all", authMiddleware, adminMiddleware, deleteAllSchedul
 router.delete("/schedule/:id", authMiddleware, adminMiddleware, deleteSchedule);
 router.post("/schedule/swap", authMiddleware, adminMiddleware, swapSchedules);
 router.put("/schedule/:id", authMiddleware, adminMiddleware, updateSchedule);
+router.get("/schedule/check-conflicts", authMiddleware, adminMiddleware, checkAllConflicts);
 
 module.exports = router;

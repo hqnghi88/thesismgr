@@ -29,6 +29,9 @@ const Planning = () => {
     const [juryClipboard, setJuryClipboard] = useState(null); // { principal, examinator }
     const [selectedIds, setSelectedIds] = useState([]); // For bulk jury assignment
     const [isDropdownSearching, setIsDropdownSearching] = useState(false);
+    const [conflictIds, setConflictIds] = useState(new Set()); // schedule IDs that have conflicts
+    const [conflictDetails, setConflictDetails] = useState([]);  // details for tooltip/panel
+    const [checkingConflicts, setCheckingConflicts] = useState(false);
     const token = localStorage.getItem("token");
 
     const fetchSchedules = async () => {
@@ -37,8 +40,31 @@ const Planning = () => {
                 headers: { Authorization: `Bearer ${token}` },
             });
             setSchedules(res.data);
+            // Auto-clear conflicts on refresh so stale highlights don't linger
+            setConflictIds(new Set());
+            setConflictDetails([]);
         } catch (err) {
             console.error("Fetch error:", err.response?.data || err.message);
+        }
+    };
+
+    const handleCheckConflicts = async () => {
+        setCheckingConflicts(true);
+        try {
+            const res = await axios.get(`${import.meta.env.VITE_API_URL}/api/schedule/check-conflicts`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            setConflictIds(new Set(res.data.conflictedScheduleIds));
+            setConflictDetails(res.data.details);
+            if (res.data.conflictCount === 0) {
+                notify('✅ No conflicts found! Schedule is clean.');
+            } else {
+                notify(`⚠️ Found ${res.data.conflictCount} conflict(s). Affected cells are highlighted in orange.`);
+            }
+        } catch (err) {
+            notify('Error checking conflicts');
+        } finally {
+            setCheckingConflicts(false);
         }
     };
 
@@ -472,14 +498,46 @@ const Planning = () => {
 
 
                 <Card className="border-0 shadow-sm mb-4">
-                    <Card.Body className="d-flex gap-2 flex-wrap">
+                    <Card.Body className="d-flex gap-2 flex-wrap align-items-center">
                         <Button variant="success" onClick={() => setShowAutoPlanModal(true)} disabled={loading}>
                             {loading ? "Planning..." : "🤖 Run Auto-Planning"}
                         </Button>
                         <Button variant="outline-danger" onClick={handleDeleteAllSchedules}>🗑️ Clear All</Button>
                         <Button variant="primary" onClick={handleExport}>📥 Export Excel</Button>
                         <Button variant="info" className="text-white" onClick={handleExportDocx}>📝 Export Word</Button>
+                        <div className="ms-auto d-flex align-items-center gap-2">
+                            {conflictIds.size > 0 && (
+                                <Badge bg="danger" className="rounded-pill px-3 py-2" style={{ fontSize: '0.85rem' }}>
+                                    ⚠️ {conflictIds.size} conflict{conflictIds.size > 1 ? 's' : ''}
+                                </Badge>
+                            )}
+                            <Button
+                                variant={conflictIds.size > 0 ? 'warning' : 'outline-warning'}
+                                onClick={handleCheckConflicts}
+                                disabled={checkingConflicts}
+                                className="fw-semibold"
+                            >
+                                {checkingConflicts ? '🔄 Checking...' : '⚠️ Check Conflicts'}
+                            </Button>
+                            {conflictIds.size > 0 && (
+                                <Button variant="outline-secondary" size="sm" onClick={() => { setConflictIds(new Set()); setConflictDetails([]); }}>
+                                    ✕ Clear
+                                </Button>
+                            )}
+                        </div>
                     </Card.Body>
+                    {conflictDetails.length > 0 && (
+                        <div className="px-3 pb-3">
+                            <div className="alert alert-warning py-2 mb-0 small">
+                                <strong>⚠️ Conflicts detected:</strong>{' '}
+                                {conflictDetails.map((d, i) => (
+                                    <span key={i} className="me-3">
+                                        <strong>{d.professor}</strong> is double-booked at {new Date(new Date(d.time).getTime() + 7*3600000).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' })}
+                                    </span>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </Card>
 
                 {/* AutoPlan Config Modal */}
@@ -648,10 +706,17 @@ const Planning = () => {
                                                                     onClick={() => handleMoveOrSwap(s?._id, slotDate.toISOString(), room)}
                                                                 >
                                                                     {s ? (
-                                                                        <div className={`text-start p-1 rounded h-100 d-flex flex-column shadow-sm border-start border-3 ${isMoving ? 'border-danger animate-pulse shadow' : 'border-primary'}`} style={{ backgroundColor: selectedIds.includes(s._id) ? '#eef6ff' : '#fff', opacity: isMoving ? 0.8 : 1 }}>
-                                                                            {/* Tiny header: title + checkbox */}
+                                                                        <div className={`text-start p-1 rounded h-100 d-flex flex-column shadow-sm border-start border-3 ${isMoving ? 'border-danger animate-pulse shadow' : conflictIds.has(s._id) ? 'border-warning' : 'border-primary'}`} style={{ backgroundColor: isMoving ? '#fff' : conflictIds.has(s._id) ? '#fffbeb' : selectedIds.includes(s._id) ? '#eef6ff' : '#fff', opacity: isMoving ? 0.8 : 1 }}>
+                                                                            {/* Title + conflict badge + checkbox */}
                                                                             <div className="d-flex justify-content-between align-items-start mb-1 gap-1">
-                                                                                <div className="text-muted fw-semibold" style={{ fontSize: '0.72rem', lineHeight: '1.3', flex: 1, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }} title={s.thesis?.title}>{s.thesis?.title}</div>
+                                                                                <div style={{ flex: 1, minWidth: 0 }}>
+                                                                                    {conflictIds.has(s._id) && (
+                                                                                        <div className="d-inline-flex align-items-center gap-1 mb-1 px-1 rounded" style={{ backgroundColor: '#fef3c7', border: '1px solid #f59e0b', fontSize: '0.6rem', fontWeight: 700, color: '#92400e' }}>
+                                                                                            ⚠️ CONFLICT
+                                                                                        </div>
+                                                                                    )}
+                                                                                    <div className="text-muted fw-semibold" style={{ fontSize: '0.72rem', lineHeight: '1.3', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }} title={s.thesis?.title}>{s.thesis?.title}</div>
+                                                                                </div>
                                                                                 <input
                                                                                     type="checkbox"
                                                                                     checked={selectedIds.includes(s._id)}

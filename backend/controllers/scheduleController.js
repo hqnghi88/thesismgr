@@ -196,20 +196,6 @@ const updateSchedule = async (req, res) => {
         const schedule = await Schedule.findById(req.params.id);
         if (!schedule) return res.status(404).json({ message: "Schedule not found" });
 
-        const newStartTime = startTime ? new Date(startTime) : schedule.startTime;
-        const newRoom = room || schedule.room;
-        const newPrincipal = principal || schedule.principal;
-        const newExaminator = examinator || schedule.examinator;
-        const newSupervisor = supervisor || schedule.supervisor;
-
-        if ([newPrincipal, newExaminator, newSupervisor].some((v, i, a) => a.indexOf(v) !== i)) {
-            return res.status(400).json({ message: "All jury members must be different people." });
-        }
-
-        const conflicts = await getConflicts(newStartTime, newRoom, newPrincipal, newExaminator, newSupervisor, [req.params.id]);
-        if (conflicts.room) return res.status(400).json({ message: `Room ${newRoom} is occupied.` });
-        if (conflicts.profs.length > 0) return res.status(400).json({ message: "Professor conflict detected." });
-
         if (principal) schedule.principal = principal;
         if (examinator) schedule.examinator = examinator;
         if (supervisor) schedule.supervisor = supervisor;
@@ -235,13 +221,6 @@ const swapSchedules = async (req, res) => {
         const temp = { startTime: s1.startTime, endTime: s1.endTime, room: s1.room };
         s1.startTime = s2.startTime; s1.endTime = s2.endTime; s1.room = s2.room;
         s2.startTime = temp.startTime; s2.endTime = temp.endTime; s2.room = temp.room;
-
-        const c1 = await getConflicts(s1.startTime, s1.room, s1.principal, s1.examinator, s1.supervisor, [id1, id2]);
-        const c2 = await getConflicts(s2.startTime, s2.room, s2.principal, s2.examinator, s2.supervisor, [id1, id2]);
-
-        if (c1.room || c1.profs.length > 0 || c2.room || c2.profs.length > 0) {
-            return res.status(400).json({ message: "Swap results in a conflict." });
-        }
 
         await s1.save();
         await s2.save();
@@ -455,4 +434,50 @@ const exportDocx = async (req, res) => {
     }
 };
 
-module.exports = { autoPlan, getSchedules, updateSchedule, deleteSchedule, exportSchedules, exportDocx, deleteAllSchedules, swapSchedules };
+const checkAllConflicts = async (req, res) => {
+    try {
+        const schedules = await Schedule.find()
+            .populate('principal examinator supervisor', 'name _id');
+
+        const timeSlotMap = {};
+        schedules.forEach(s => {
+            const key = new Date(s.startTime).toISOString();
+            if (!timeSlotMap[key]) timeSlotMap[key] = [];
+            timeSlotMap[key].push(s);
+        });
+
+        const conflictedIds = new Set();
+        const details = [];
+
+        Object.entries(timeSlotMap).forEach(([timeKey, slotSchedules]) => {
+            if (slotSchedules.length < 2) return;
+            const profMap = {};
+            slotSchedules.forEach(s => {
+                [s.principal, s.examinator, s.supervisor].forEach(p => {
+                    if (!p?._id) return;
+                    const pid = p._id.toString();
+                    if (!profMap[pid]) profMap[pid] = { name: p.name, scheduleIds: [] };
+                    if (!profMap[pid].scheduleIds.includes(s._id.toString()))
+                        profMap[pid].scheduleIds.push(s._id.toString());
+                });
+            });
+            Object.entries(profMap).forEach(([, { name, scheduleIds }]) => {
+                if (scheduleIds.length > 1) {
+                    scheduleIds.forEach(id => conflictedIds.add(id));
+                    details.push({ professor: name, time: timeKey, scheduleIds });
+                }
+            });
+        });
+
+        res.json({
+            conflictCount: details.length,
+            conflictedScheduleIds: [...conflictedIds],
+            details
+        });
+    } catch (error) {
+        console.error('checkAllConflicts Error:', error);
+        res.status(500).json({ message: 'Error checking conflicts' });
+    }
+};
+
+module.exports = { autoPlan, getSchedules, updateSchedule, deleteSchedule, exportSchedules, exportDocx, deleteAllSchedules, swapSchedules, checkAllConflicts };
