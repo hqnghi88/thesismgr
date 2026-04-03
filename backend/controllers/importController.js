@@ -112,6 +112,7 @@ const importThesesFromExcel = async (req, res) => {
             const studentName = row['Họ tên SV'] || row['Họ và Tên SV'] || row['Student Name'] || row['Họ và Tên'];
             let title = row['Tên đề tài'] || row['Thesis Title'] || row['Tên đề tài (Tiếng Việt và Tiếng Anh)'] || row['Tên luận văn'] || "";
             let titleEn = row['English Title'] || row['Tên đề tài tiếng Anh'] || row['Tên luận văn tiếng Anh'] || row['Thesis Title (En)'] || "";
+            const supervisorName = row['GVHD'] || row['Người hướng dẫn'] || row['Supervisor'] || row['Cán bộ hướng dẫn'] || row['Cán bộ hướng dẫn khoa học'];
 
             // If only one title is found but it contains both, split it
             // Patterns like "Vi (En)" or "Vi / En" or "Vi - En"
