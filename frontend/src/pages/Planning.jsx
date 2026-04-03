@@ -651,7 +651,8 @@ const Planning = () => {
                             <Col key={schedule._id} lg={6} xl={4}>
                                 <Card className="border-0 shadow-sm h-100 border-start border-success border-4">
                                     <Card.Body>
-                                        <h5 className="fw-bold mb-3">📅 {schedule.thesis?.title || "Untitled"}</h5>
+                                        <h5 className="fw-bold mb-1">📅 {schedule.thesis?.title || "Untitled"}</h5>
+                                        {schedule.thesis?.titleEn && <div className="text-muted small mb-2 italic">({schedule.thesis.titleEn})</div>}
                                         <div className="mb-3 small text-muted">
                                             <div className="d-flex justify-content-between mb-1"><strong>Room:</strong> <Badge bg="info">{schedule.room}</Badge></div>
                                             <div><strong>Start:</strong> {new Date(schedule.startTime).toLocaleString()}</div>
@@ -744,7 +745,7 @@ const Planning = () => {
                                                                                             ⚠️ CONFLICT
                                                                                         </div>
                                                                                     )}
-                                                                                    <div className="text-muted fw-semibold" style={{ fontSize: '0.72rem', lineHeight: '1.3', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }} title={s.thesis?.title}>{s.thesis?.title}</div>
+                                                                                    <div className="text-muted fw-semibold" style={{ fontSize: '0.72rem', lineHeight: '1.3', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }} title={s.thesis?.titleEn ? `${s.thesis.title} (${s.thesis.titleEn})` : s.thesis?.title}>{s.thesis?.titleEn ? `${s.thesis.title} (${s.thesis.titleEn})` : (s.thesis?.title || "Untitled")}</div>
                                                                                 </div>
                                                                                 <input
                                                                                     type="checkbox"

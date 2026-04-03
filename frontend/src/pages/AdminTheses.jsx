@@ -135,7 +135,10 @@ const AdminTheses = () => {
                             <Card className="border-0 shadow-sm">
                                 <Card.Body>
                                     <div className="d-flex flex-column flex-md-row justify-content-between align-items-start mb-3 gap-2">
-                                        <h5 className="mb-0 fw-bold flex-grow-1">🎓 {thesis.title}</h5>
+                                        <div className="flex-grow-1">
+                                            <h5 className="mb-0 fw-bold">🎓 {thesis.title}</h5>
+                                            {thesis.titleEn && <h6 className="text-muted mt-1 small italic">({thesis.titleEn})</h6>}
+                                        </div>
                                         <Badge bg={getStatusVariant(thesis.status)} className="text-nowrap">
                                             {thesis.status.replace('_', ' ')}
                                         </Badge>

@@ -301,7 +301,8 @@ const exportSchedules = async (req, res) => {
         const schedules = await Schedule.find().populate('thesis principal examinator supervisor student');
         const rows = [["STT", "MSSV", "Họ tên SV", "Tên đề tài", "GVHD", "Giờ", "Hội đồng"]];
         schedules.forEach((s, i) => {
-            rows.push([i + 1, s.student?.email?.split('@')[0].toUpperCase(), s.student?.name, s.thesis?.title, s.supervisor?.name, new Date(s.startTime).toLocaleTimeString(), `1. ${s.principal?.name}\n2. ${s.examinator?.name}\n3. ${s.supervisor?.name}`]);
+            const fullTitle = s.thesis?.titleEn ? `${s.thesis.title} (${s.thesis.titleEn})` : (s.thesis?.title || "-");
+            rows.push([i + 1, s.student?.email?.split('@')[0].toUpperCase(), s.student?.name, fullTitle, s.supervisor?.name, new Date(s.startTime).toLocaleTimeString(), `1. ${s.principal?.name}\n2. ${s.examinator?.name}\n3. ${s.supervisor?.name}`]);
         });
         const wb = xlsx.utils.book_new();
         const ws = xlsx.utils.aoa_to_sheet(rows);
@@ -393,7 +394,7 @@ const exportDocx = async (req, res) => {
                             new TableCell({ children: [new Paragraph({ text: (idx + 1).toString(), alignment: AlignmentType.CENTER })] }),
                             new TableCell({ children: [new Paragraph({ text: s.student?.email?.split('@')[0].toUpperCase() || "-" })] }),
                             new TableCell({ children: [new Paragraph({ text: s.student?.name || "-" })] }),
-                            new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: s.thesis?.title || "-", size: 18 })] })] }),
+                            new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: s.thesis?.titleEn ? `${s.thesis.title} (${s.thesis.titleEn})` : (s.thesis?.title || "-"), size: 18 })] })] }),
                             new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: s.supervisor?.name || "-", size: 18 })] })] }),
                             new TableCell({ children: [new Paragraph({ text: timeStr, alignment: AlignmentType.CENTER })] }),
                             new TableCell({

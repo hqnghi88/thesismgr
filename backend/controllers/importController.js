@@ -110,8 +110,28 @@ const importThesesFromExcel = async (req, res) => {
 
             const mssv = row['MSSV'] || row['MÃ SV'] || row['Mã SV'] || row['Mã sinh viên'];
             const studentName = row['Họ tên SV'] || row['Họ và Tên SV'] || row['Student Name'] || row['Họ và Tên'];
-            const title = row['Tên đề tài'] || row['Thesis Title'] || row['Tên đề tài (Tiếng Việt và Tiếng Anh)'] || row['Tên luận văn'];
-            const supervisorName = row['GVHD'] || row['Người hướng dẫn'] || row['Supervisor'] || row['Cán bộ hướng dẫn'];
+            let title = row['Tên đề tài'] || row['Thesis Title'] || row['Tên đề tài (Tiếng Việt và Tiếng Anh)'] || row['Tên luận văn'] || "";
+            let titleEn = row['English Title'] || row['Tên đề tài tiếng Anh'] || row['Thesis Title (En)'] || "";
+
+            // If only one title is found but it contains both, split it
+            // Patterns like "Vi (En)" or "Vi / En" or "Vi - En"
+            if (title && !titleEn) {
+                const parts = title.split(/\s*[\(\/\-]\s*/);
+                if (parts.length >= 2) {
+                    const firstPart = parts[0].trim();
+                    const secondPart = title.match(/\((.*?)\)/)?.[1] || parts[1].trim();
+                    
+                    // Simple heuristic: if the second part has common English words or different alphabet, it's English
+                    // But here we'll just assume the part in parentheses or after / is English
+                    if (title.includes('(')) {
+                        title = title.split('(')[0].trim();
+                        titleEn = secondPart;
+                    } else {
+                        title = firstPart;
+                        titleEn = secondPart;
+                    }
+                }
+            }
 
             if (!mssv || !studentName || !title || !supervisorName) continue;
 
@@ -173,18 +193,32 @@ const importThesesFromExcel = async (req, res) => {
             }
 
             // 3. Create or Update Thesis
-            const thesisData = {
-                student: student._id,
-                supervisor: professor._id,
-                title: String(title).trim(),
-                status: "approved"
-            };
-
             const existingThesis = await Thesis.findOne({ student: student._id });
+            
             if (existingThesis) {
-                await Thesis.findByIdAndUpdate(existingThesis._id, thesisData);
+                // Update title, titleEn, and supervisor but preserve status if it's already progressed beyond 'approved'
+                const updates = {
+                    supervisor: professor._id,
+                    title: String(title).trim(),
+                    titleEn: String(titleEn).trim()
+                };
+                
+                // Only reset status to 'approved' if it's currently 'submitted' or 'under_review'
+                // If it's already 'approved', 'scheduled', or 'completed', keep the current status
+                if (['submitted', 'under_review'].includes(existingThesis.status)) {
+                    updates.status = "approved";
+                }
+
+                await Thesis.findByIdAndUpdate(existingThesis._id, updates);
             } else {
-                const newThesis = new Thesis(thesisData);
+                // New thesis
+                const newThesis = new Thesis({
+                    student: student._id,
+                    supervisor: professor._id,
+                    title: String(title).trim(),
+                    titleEn: String(titleEn).trim(),
+                    status: "approved"
+                });
                 await newThesis.save();
             }
             count++;

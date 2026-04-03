@@ -55,9 +55,14 @@
         - Synchronized search feature and consistent dropdown behavior across List and Timetable views in Planning.
         - Created `frontend/netlify.toml` for SPA routing on Netlify.
         - Created root `render.yaml` for backend deployment on Render.
+        - Implemented English title support (`titleEn`) for theses:
+            - Added `titleEn` field to `Thesis` model.
+            - Updated Excel import to automatically parse/import English titles.
+            - Enhanced DOCX and Excel exports to append English translation to the Vietnamese title.
+            - Updated Frontend (Theses, AdminTheses, Planning) to support and display English titles.
 
     - Now:
-        - Retrieved local Admin record for production database seeding.
+        - Verified implementation of English title support across the entire stack.
         - Preparing deployment instructions for Netlify and Render.com.
 
     - Next:

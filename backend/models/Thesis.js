@@ -16,6 +16,9 @@ const thesisSchema = new mongoose.Schema(
             type: String,
             required: true,
         },
+        titleEn: {
+            type: String,
+        },
         abstract: {
             type: String,
         },

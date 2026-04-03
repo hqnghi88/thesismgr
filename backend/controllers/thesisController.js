@@ -2,11 +2,12 @@ const Thesis = require("../models/Thesis");
 
 const createThesis = async (req, res) => {
     try {
-        const { title, abstract, supervisor, documentUrl } = req.body;
+        const { title, titleEn, abstract, supervisor, documentUrl } = req.body;
         const newThesis = new Thesis({
             student: req.user.id,
             supervisor,
             title,
+            titleEn,
             abstract,
             documentUrl,
         });

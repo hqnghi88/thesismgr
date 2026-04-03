@@ -6,7 +6,7 @@ import { useNotification } from "../context/NotificationContext";
 const Theses = () => {
     const { notify, confirm } = useNotification();
     const [theses, setTheses] = useState([]);
-    const [form, setForm] = useState({ title: "", abstract: "", supervisor: "" });
+    const [form, setForm] = useState({ title: "", titleEn: "", abstract: "", supervisor: "" });
     const [editingId, setEditingId] = useState(null);
     const [professors, setProfessors] = useState([]);
     const token = localStorage.getItem("token");
@@ -51,7 +51,7 @@ const Theses = () => {
                     headers: { Authorization: `Bearer ${token}` },
                 });
             }
-            setForm({ title: "", abstract: "", supervisor: "" });
+            setForm({ title: "", titleEn: "", abstract: "", supervisor: "" });
             fetchTheses();
         } catch (err) {
             console.error("error:", err.response?.data || err.message);
@@ -62,6 +62,7 @@ const Theses = () => {
         setEditingId(thesis._id);
         setForm({
             title: thesis.title,
+            titleEn: thesis.titleEn || "",
             abstract: thesis.abstract,
             supervisor: thesis.supervisor._id
         });
@@ -70,7 +71,7 @@ const Theses = () => {
 
     const handleCancelEdit = () => {
         setEditingId(null);
-        setForm({ title: "", abstract: "", supervisor: "" });
+        setForm({ title: "", titleEn: "", abstract: "", supervisor: "" });
     };
 
     const handleDelete = async (thesisId) => {
@@ -106,13 +107,24 @@ const Theses = () => {
                             <Row>
                                 <Col md={12} className="mb-3">
                                     <Form.Group>
-                                        <Form.Label className="fw-semibold">Thesis Title</Form.Label>
+                                        <Form.Label className="fw-semibold">Thesis Title (Vietnamese)</Form.Label>
                                         <Form.Control
                                             type="text"
-                                            placeholder="Enter thesis title"
+                                            placeholder="Nhập tên đề tài tiếng Việt"
                                             value={form.title}
                                             onChange={(e) => setForm({ ...form, title: e.target.value })}
                                             required
+                                        />
+                                    </Form.Group>
+                                </Col>
+                                <Col md={12} className="mb-3">
+                                    <Form.Group>
+                                        <Form.Label className="fw-semibold">Thesis Title (English)</Form.Label>
+                                        <Form.Control
+                                            type="text"
+                                            placeholder="Enter English translation"
+                                            value={form.titleEn}
+                                            onChange={(e) => setForm({ ...form, titleEn: e.target.value })}
                                         />
                                     </Form.Group>
                                 </Col>
@@ -167,7 +179,10 @@ const Theses = () => {
                             <Card className="border-0 shadow-sm h-100">
                                 <Card.Body>
                                     <div className="d-flex justify-content-between align-items-start mb-2">
-                                        <h5 className="mb-0 fw-bold">🎓 {thesis.title}</h5>
+                                        <div>
+                                            <h5 className="mb-0 fw-bold">🎓 {thesis.title}</h5>
+                                            {thesis.titleEn && <h6 className="text-muted mt-1 small italic">({thesis.titleEn})</h6>}
+                                        </div>
                                         <Badge bg={getStatusVariant(thesis.status)}>
                                             {thesis.status.replace('_', ' ')}
                                         </Badge>
