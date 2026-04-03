@@ -394,7 +394,15 @@ const exportDocx = async (req, res) => {
                             new TableCell({ children: [new Paragraph({ text: (idx + 1).toString(), alignment: AlignmentType.CENTER })] }),
                             new TableCell({ children: [new Paragraph({ text: s.student?.email?.split('@')[0].toUpperCase() || "-" })] }),
                             new TableCell({ children: [new Paragraph({ text: s.student?.name || "-" })] }),
-                            new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: s.thesis?.titleEn ? `${s.thesis.title} (${s.thesis.titleEn})` : (s.thesis?.title || "-"), size: 18 })] })] }),
+                                                         new TableCell({ children: [new Paragraph({ 
+                                 children: [
+                                     new TextRun({ text: s.thesis?.title || "-", size: 18 }),
+                                     ...(s.thesis?.titleEn ? [
+                                         new TextRun({ text: "", break: 1 }),
+                                         new TextRun({ text: `(${s.thesis.titleEn})`, size: 16, italic: true })
+                                     ] : [])
+                                 ] 
+                             })] }),
                             new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: s.supervisor?.name || "-", size: 18 })] })] }),
                             new TableCell({ children: [new Paragraph({ text: timeStr, alignment: AlignmentType.CENTER })] }),
                             new TableCell({
