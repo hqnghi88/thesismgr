@@ -16,7 +16,7 @@ const ManualPlanning = () => {
     const [courseCode, setCourseCode] = useState("");
     const [controls, setControls] = useState({
         startDate: new Date().toISOString().slice(0, 10),
-        numDays: 3,
+        capacity: 6,
         roomCount: 3,
         sessionsPerDay: 2,
     });
@@ -84,7 +84,7 @@ const ManualPlanning = () => {
                 semester: activeSemester._id,
                 courseCode,
                 startDate: controls.startDate,
-                numDays: controls.numDays,
+                capacity: controls.capacity,
                 roomCount: controls.roomCount,
                 sessionsPerDay: controls.sessionsPerDay,
             }, {
@@ -198,9 +198,10 @@ const ManualPlanning = () => {
                 <Card.Body>
                     <h5 className="fw-bold mb-3">Manual Planning</h5>
                     <p className="text-muted mb-3 small">
-                        Arrange juries like the reference Excel: each day has <b>Sang</b>/<b>Chieu</b> sessions, each
-                        session has up to 4 committees of 3 professors. Auto-planning
-                        distributes the approved theses across the committees by count — no per-thesis details.
+                        Arrange juries like the reference Excel: each committee is headed by the <b>thesis supervisor</b>,
+                        who sits as the 1st member with their own theses (the number shown), plus 2 other members.
+                        Days are Sang/Chieu sessions with up to 4 committees per session. The plan shows only counts —
+                        no per-thesis details.
                     </p>
                     <Row className="g-3 mb-2">
                         <Col md={4} sm={6}>
@@ -222,13 +223,13 @@ const ManualPlanning = () => {
                             />
                         </Col>
                         <Col md={2} sm={6}>
-                            <Form.Label className="fw-semibold small mb-1">Number of Days</Form.Label>
+                            <Form.Label className="fw-semibold small mb-1">Theses per Committee</Form.Label>
                             <Form.Control
                                 type="number"
                                 min="1"
                                 max="14"
-                                value={controls.numDays}
-                                onChange={(e) => setControls({ ...controls, numDays: parseInt(e.target.value) || 1 })}
+                                value={controls.capacity}
+                                onChange={(e) => setControls({ ...controls, capacity: parseInt(e.target.value) || 1 })}
                             />
                         </Col>
                         <Col md={3} sm={6} className="d-flex align-items-end">
@@ -342,7 +343,7 @@ const ManualPlanning = () => {
                 </Modal.Header>
                 <Modal.Body>
                     <Form.Group className="mb-3">
-                        <Form.Label className="fw-semibold">Member 1 (President)</Form.Label>
+                        <Form.Label className="fw-semibold">Member 1 (Supervisor)</Form.Label>
                         <Form.Select value={editing?.principal || ""} onChange={(e) => setEditing({ ...editing, principal: e.target.value })}>
                             <option value="">Select...</option>
                             {professors.map(p => <option key={p._id} value={p._id}>{p.name}</option>)}

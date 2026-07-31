@@ -27,12 +27,14 @@ const getManualPlan = async (req, res) => {
 
 const autoPlanManual = async (req, res) => {
     try {
-        const { semester, courseCode, startDate, numDays = 3, roomCount = 3, sessionsPerDay = 2 } = req.body;
+        const { semester, courseCode, startDate, capacity = 6, roomCount = 3, sessionsPerDay = 2 } = req.body;
         if (!semester || !courseCode) {
             return res.status(400).json({ message: "semester and courseCode are required" });
         }
 
-        const theses = await Thesis.find({ semester, courseCode, status: { $ne: "completed" } }).sort({ title: 1 });
+        const theses = await Thesis.find({ semester, courseCode, status: { $ne: "completed" } })
+            .populate('supervisor', 'name')
+            .sort({ title: 1 });
         if (theses.length === 0) {
             return res.status(400).json({ message: `No theses for course code ${courseCode} in this semester.` });
         }
@@ -44,7 +46,48 @@ const autoPlanManual = async (req, res) => {
 
         const sessions = sessionsPerDay >= 2 ? ["Sang", "Chieu"] : ["Sang"];
         const numRooms = Math.min(Math.max(parseInt(roomCount) || 1, 1), DEFAULT_ROOMS.length);
-        const numD = Math.max(parseInt(numDays) || 1, 1);
+        const cap = Math.max(parseInt(capacity) || 6, 1);
+
+        // Group theses by supervisor. Each supervisor heads the committee(s)
+        // for their own theses (matching the reference Excel where e.g. "Tram 5"
+        // is a committee led by supervisor Tram with 5 of Tram's theses).
+        const bySupervisor = {};
+        theses.forEach(t => {
+            const supId = t.supervisor?._id?.toString() || t.supervisor?.toString();
+            if (!supId) return;
+            if (!bySupervisor[supId]) bySupervisor[supId] = { supId, supName: t.supervisor?.name || "", theses: [] };
+            bySupervisor[supId].theses.push(t);
+        });
+
+        if (Object.keys(bySupervisor).length === 0) {
+            return res.status(400).json({ message: "Theses have no supervisor assigned." });
+        }
+
+        // Split each supervisor's theses into as-evenly-as-possible committees.
+        const allCommittees = [];
+        Object.values(bySupervisor)
+            .sort((a, b) => b.theses.length - a.theses.length || a.supName.localeCompare(b.supName))
+            .forEach(group => {
+                const n = group.theses.length;
+                const chunks = Math.max(1, Math.ceil(n / cap));
+                const base = Math.floor(n / chunks);
+                const remainder = n % chunks;
+                let idx = 0;
+                for (let i = 0; i < chunks; i++) {
+                    const size = base + (i < remainder ? 1 : 0);
+                    allCommittees.push({
+                        principal: group.supId,
+                        examinator: null,
+                        supervisor: null,
+                        thesisIds: group.theses.slice(idx, idx + size).map(t => t._id),
+                    });
+                    idx += size;
+                }
+            });
+
+        // Number of days is derived from how many committees we have.
+        const perDay = sessions.length * numRooms;
+        const numD = Math.max(1, Math.ceil(allCommittees.length / perDay));
 
         const anchorDay = new Date(startDate || new Date());
         anchorDay.setUTCHours(0, 0, 0, 0);
@@ -53,37 +96,54 @@ const autoPlanManual = async (req, res) => {
         for (let d = 0; d < numD; d++) {
             const date = new Date(anchorDay);
             date.setDate(anchorDay.getDate() + d);
-            const daySessions = sessions.map(sess => ({
-                session: sess,
-                committees: Array.from({ length: numRooms }, (_, r) => ({
-                    room: DEFAULT_ROOMS[r],
-                    principal: null,
-                    examinator: null,
-                    supervisor: null,
-                    thesisIds: [],
-                })),
-            }));
-            days.push({ date, sessions: daySessions });
+            days.push({
+                date,
+                sessions: sessions.map(sess => ({ session: sess, committees: [] })),
+            });
         }
 
-        let profIdx = 0;
-        const n = professors.length;
-        days.forEach(day => {
-            day.sessions.forEach(sess => {
-                sess.committees.forEach(c => {
-                    c.principal = professors[profIdx % n]._id;
-                    c.examinator = professors[(profIdx + 1) % n]._id;
-                    c.supervisor = professors[(profIdx + 2) % n]._id;
-                    profIdx += 3;
-                });
-            });
-        });
+        // Assign the 2 other members of each committee, rotating through
+        // professors so a supervisor never sits on their own committee.
+        const sessionSlots = [];
+        days.forEach((day, di) => day.sessions.forEach((sess, si) => {
+            sessionSlots.push({ day: di, sess: si, count: 0, supIds: new Set() });
+        }));
 
-        const allCommittees = [];
-        days.forEach(day => day.sessions.forEach(sess => allCommittees.push(...sess.committees)));
-        theses.forEach((t, i) => {
-            allCommittees[i % allCommittees.length].thesisIds.push(t._id);
-        });
+        let otherIdx = 0;
+        // Place committees round-robin so a supervisor appears at most once per session.
+        const maxChunks = Math.max(...Object.values(bySupervisor).map(g => Math.max(1, Math.ceil(g.theses.length / cap))));
+        const sortedSupIds = Object.values(bySupervisor)
+            .sort((a, b) => b.theses.length - a.theses.length || a.supName.localeCompare(b.supName))
+            .map(g => g.supId);
+
+        for (let r = 0; r < maxChunks; r++) {
+            for (const supId of sortedSupIds) {
+                const committee = allCommittees.find(c => c.principal === supId && c._used !== true);
+                if (!committee) continue;
+                committee._used = true;
+
+                let slot = sessionSlots.find(s => s.count < numRooms && !s.supIds.has(supId))
+                    || sessionSlots.find(s => s.count < numRooms);
+                if (!slot) continue;
+
+                slot.supIds.add(supId);
+                slot.count++;
+
+                const others = professors.filter(p => p._id.toString() !== supId);
+                committee.examinator = others[otherIdx % others.length]._id;
+                committee.supervisor = others[(otherIdx + 1) % others.length]._id;
+                otherIdx++;
+
+                committee.room = DEFAULT_ROOMS[slot.count - 1] || DEFAULT_ROOMS[0];
+                days[slot.day].sessions[slot.sess].committees.push({
+                    room: committee.room,
+                    principal: committee.principal,
+                    examinator: committee.examinator,
+                    supervisor: committee.supervisor,
+                    thesisIds: committee.thesisIds,
+                });
+            }
+        }
 
         await ManualPlan.deleteOne({ semester, courseCode });
         const plan = new ManualPlan({ semester, courseCode, days });
@@ -93,6 +153,7 @@ const autoPlanManual = async (req, res) => {
         res.status(201).json({
             message: "Manual planning completed.",
             thesisCount: theses.length,
+            numDays: numD,
             plan: saved,
         });
     } catch (error) {
