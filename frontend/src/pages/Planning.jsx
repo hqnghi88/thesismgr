@@ -36,9 +36,6 @@ const Planning = () => {
     const [conflictIds, setConflictIds] = useState(new Set()); // schedule IDs that have conflicts
     const [conflictDetails, setConflictDetails] = useState([]);  // details for tooltip/panel
     const [checkingConflicts, setCheckingConflicts] = useState(false);
-    const [timeEditFor, setTimeEditFor] = useState(null); // schedule ID being edited via datetime picker
-    const [timeEditValue, setTimeEditValue] = useState(''); // datetime-local value
-    const [timeEditError, setTimeEditError] = useState('');
     const token = localStorage.getItem("token");
 
     const fetchSchedules = async () => {
@@ -180,45 +177,60 @@ const Planning = () => {
         }
     };
 
-    const openTimeEdit = (schedule) => {
-        setTimeEditFor(schedule._id);
-        setTimeEditValue(new Date(schedule.startTime).toISOString().slice(0, 16));
-        setTimeEditError('');
+    const getLocalDateString = (isoDay) => {
+        const d = new Date(isoDay);
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
     };
 
-    const handleSaveTime = async () => {
-        if (!timeEditValue) {
-            setTimeEditError('Please select a date and time');
-            return;
-        }
-        const newStart = new Date(timeEditValue);
-        if (isNaN(newStart.getTime())) {
-            setTimeEditError('Invalid date/time');
-            return;
-        }
-        const schedule = schedules.find(s => s._id === timeEditFor);
-        if (!schedule) return;
-        const newEnd = new Date(newStart);
-        newEnd.setMinutes(newEnd.getMinutes() + 35);
+    const handleShiftDay = async (rawDate, newDateStr) => {
+        if (!newDateStr) return;
+        if (getLocalDateString(rawDate) === newDateStr) return;
+
+        const oldLocal = new Date(`${getLocalDateString(rawDate)}T00:00:00`);
+        const newLocal = new Date(`${newDateStr}T00:00:00`);
+        if (isNaN(newLocal.getTime())) return;
+
+        const dayDiff = Math.round((newLocal - oldLocal) / (24 * 60 * 60 * 1000));
+        if (dayDiff === 0) return;
+
+        const daySchedules = schedules.filter(s => {
+            const sd = new Date(s.startTime);
+            sd.setHours(0, 0, 0, 0);
+            return sd.toISOString() === rawDate;
+        });
+        if (daySchedules.length === 0) return;
+
+        const label = new Date(rawDate).toLocaleDateString('vi-VN');
+        if (!(await confirm(
+            `Move all ${daySchedules.length} schedule(s) from ${label} to ${newDateStr}? Each slot keeps its time of day.`,
+            "Move Day",
+            { requirePhrase: "MOVE" }
+        ))) return;
 
         try {
-            await axios.put(`${import.meta.env.VITE_API_URL}/api/schedule/${timeEditFor}`, {
-                startTime: newStart.toISOString(),
-                endTime: newEnd.toISOString(),
-                room: schedule.room,
-                principal: schedule.principal?._id,
-                examinator: schedule.examinator?._id,
-                supervisor: schedule.supervisor?._id
-            }, {
-                headers: { Authorization: `Bearer ${token}` },
-            });
-            setTimeEditFor(null);
-            setTimeEditValue('');
-            setTimeEditError('');
+            await Promise.all(daySchedules.map(s => {
+                const newStart = new Date(s.startTime);
+                const newEnd = new Date(s.endTime);
+                newStart.setDate(newStart.getDate() + dayDiff);
+                newEnd.setDate(newEnd.getDate() + dayDiff);
+                return axios.put(`${import.meta.env.VITE_API_URL}/api/schedule/${s._id}`, {
+                    startTime: newStart.toISOString(),
+                    endTime: newEnd.toISOString(),
+                    room: s.room,
+                    principal: s.principal?._id,
+                    examinator: s.examinator?._id,
+                    supervisor: s.supervisor?._id
+                }, {
+                    headers: { Authorization: `Bearer ${token}` },
+                });
+            }));
+            notify(`Moved ${daySchedules.length} schedule(s) to ${newDateStr}`);
             fetchSchedules();
-            notify('Schedule date/time updated');
         } catch (err) {
-            setTimeEditError(err.response?.data?.message || "Error updating date/time");
+            notify(err.response?.data?.message || "Error moving day");
         }
     };
 
@@ -730,35 +742,6 @@ const Planning = () => {
                     </Modal.Body>
                 </Modal>
 
-                {/* Schedule Date/Time Picker Modal */}
-                <Modal show={timeEditFor !== null} onHide={() => setTimeEditFor(null)} centered>
-                    <Modal.Header closeButton>
-                        <Modal.Title>⏰ Change Schedule Date & Time</Modal.Title>
-                    </Modal.Header>
-                    <Modal.Body>
-                        {timeEditError && <Alert variant="danger">{timeEditError}</Alert>}
-                        <Form onSubmit={(e) => { e.preventDefault(); handleSaveTime(); }}>
-                            <Form.Group className="mb-3">
-                                <Form.Label className="fw-semibold">Defense Date & Time</Form.Label>
-                                <Form.Control
-                                    type="datetime-local"
-                                    value={timeEditValue}
-                                    onChange={(e) => setTimeEditValue(e.target.value)}
-                                    required
-                                    autoFocus
-                                />
-                                <Form.Text className="text-muted">
-                                    The end time is automatically set to 35 minutes after the start time.
-                                </Form.Text>
-                            </Form.Group>
-                            <div className="d-flex gap-2 justify-content-end mt-3">
-                                <Button variant="secondary" onClick={() => setTimeEditFor(null)}>Cancel</Button>
-                                <Button variant="success" type="submit">Update Time</Button>
-                            </div>
-                        </Form>
-                    </Modal.Body>
-                </Modal>
-
                 {viewMode === 'cards' && (
                     <Row className="g-4">
                         {schedules.map((schedule) => (
@@ -804,7 +787,6 @@ const Planning = () => {
                                             </div>
                                         </div>
                                         <div className="d-flex gap-2">
-                                            <Button variant="outline-primary" size="sm" onClick={() => openTimeEdit(schedule)}>⏰ Time</Button>
                                             <Button variant="outline-primary" size="sm" onClick={() => handleEdit(schedule)}>✏️ Edit</Button>
                                         </div>
                                     </Card.Body>
@@ -818,7 +800,16 @@ const Planning = () => {
                     <div className="d-flex flex-column gap-5">
                         {dayWiseTimetables.map(({ date, rooms, timeSlots, timetableData, rawDate }) => (
                             <div key={date}>
-                                <h4 className="fw-bold mb-3 text-secondary border-bottom pb-2">🗓️ Schedule for {date}</h4>
+                                <div className="d-flex align-items-center gap-2 mb-3 border-bottom pb-2">
+                                    <h4 className="fw-bold m-0 text-secondary">🗓️ Schedule for {date}</h4>
+                                    <Form.Control
+                                        type="date"
+                                        value={getLocalDateString(rawDate)}
+                                        onChange={(e) => handleShiftDay(rawDate, e.target.value)}
+                                        style={{ width: '160px' }}
+                                        title="Change the date of all schedules on this day"
+                                    />
+                                </div>
                                 <Card className="border-0 shadow-sm overflow-hidden">
                                     <div className="table-responsive">
                                         <Table bordered hover size="sm" className="mb-0 text-center bg-white">
@@ -913,7 +904,6 @@ const Planning = () => {
                                                                             {/* Footer */}
                                                                             <div className="d-flex align-items-center pt-1 mt-1 border-top" onClick={(e) => e.stopPropagation()}>
                                                                                 {isMoving && <span className="small text-danger fw-bold">PICKED UP</span>}
-                                                                                <Button variant="outline-primary" size="sm" className="border-0 px-1 py-0" style={{ fontSize: '0.6rem' }} onClick={(e) => { e.stopPropagation(); openTimeEdit(s); }}>⏰</Button>
                                                                                 <Button variant="outline-secondary" size="sm" className="border-0 px-1 py-0 ms-auto" style={{ fontSize: '0.6rem' }} onClick={(e) => { e.stopPropagation(); copyJury(s); }}>📋 Copy</Button>
                                                                             </div>
                                                                         </div>
