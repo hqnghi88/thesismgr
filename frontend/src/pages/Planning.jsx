@@ -36,6 +36,9 @@ const Planning = () => {
     const [conflictIds, setConflictIds] = useState(new Set()); // schedule IDs that have conflicts
     const [conflictDetails, setConflictDetails] = useState([]);  // details for tooltip/panel
     const [checkingConflicts, setCheckingConflicts] = useState(false);
+    const [timeEditFor, setTimeEditFor] = useState(null); // schedule ID being edited via datetime picker
+    const [timeEditValue, setTimeEditValue] = useState(''); // datetime-local value
+    const [timeEditError, setTimeEditError] = useState('');
     const token = localStorage.getItem("token");
 
     const fetchSchedules = async () => {
@@ -174,6 +177,48 @@ const Planning = () => {
             fetchSchedules();
         } catch (err) {
             notify(err.response?.data?.message || "Error updating time");
+        }
+    };
+
+    const openTimeEdit = (schedule) => {
+        setTimeEditFor(schedule._id);
+        setTimeEditValue(new Date(schedule.startTime).toISOString().slice(0, 16));
+        setTimeEditError('');
+    };
+
+    const handleSaveTime = async () => {
+        if (!timeEditValue) {
+            setTimeEditError('Please select a date and time');
+            return;
+        }
+        const newStart = new Date(timeEditValue);
+        if (isNaN(newStart.getTime())) {
+            setTimeEditError('Invalid date/time');
+            return;
+        }
+        const schedule = schedules.find(s => s._id === timeEditFor);
+        if (!schedule) return;
+        const newEnd = new Date(newStart);
+        newEnd.setMinutes(newEnd.getMinutes() + 35);
+
+        try {
+            await axios.put(`${import.meta.env.VITE_API_URL}/api/schedule/${timeEditFor}`, {
+                startTime: newStart.toISOString(),
+                endTime: newEnd.toISOString(),
+                room: schedule.room,
+                principal: schedule.principal?._id,
+                examinator: schedule.examinator?._id,
+                supervisor: schedule.supervisor?._id
+            }, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            setTimeEditFor(null);
+            setTimeEditValue('');
+            setTimeEditError('');
+            fetchSchedules();
+            notify('Schedule date/time updated');
+        } catch (err) {
+            setTimeEditError(err.response?.data?.message || "Error updating date/time");
         }
     };
 
@@ -685,6 +730,35 @@ const Planning = () => {
                     </Modal.Body>
                 </Modal>
 
+                {/* Schedule Date/Time Picker Modal */}
+                <Modal show={timeEditFor !== null} onHide={() => setTimeEditFor(null)} centered>
+                    <Modal.Header closeButton>
+                        <Modal.Title>⏰ Change Schedule Date & Time</Modal.Title>
+                    </Modal.Header>
+                    <Modal.Body>
+                        {timeEditError && <Alert variant="danger">{timeEditError}</Alert>}
+                        <Form onSubmit={(e) => { e.preventDefault(); handleSaveTime(); }}>
+                            <Form.Group className="mb-3">
+                                <Form.Label className="fw-semibold">Defense Date & Time</Form.Label>
+                                <Form.Control
+                                    type="datetime-local"
+                                    value={timeEditValue}
+                                    onChange={(e) => setTimeEditValue(e.target.value)}
+                                    required
+                                    autoFocus
+                                />
+                                <Form.Text className="text-muted">
+                                    The end time is automatically set to 35 minutes after the start time.
+                                </Form.Text>
+                            </Form.Group>
+                            <div className="d-flex gap-2 justify-content-end mt-3">
+                                <Button variant="secondary" onClick={() => setTimeEditFor(null)}>Cancel</Button>
+                                <Button variant="success" type="submit">Update Time</Button>
+                            </div>
+                        </Form>
+                    </Modal.Body>
+                </Modal>
+
                 {viewMode === 'cards' && (
                     <Row className="g-4">
                         {schedules.map((schedule) => (
@@ -730,6 +804,7 @@ const Planning = () => {
                                             </div>
                                         </div>
                                         <div className="d-flex gap-2">
+                                            <Button variant="outline-primary" size="sm" onClick={() => openTimeEdit(schedule)}>⏰ Time</Button>
                                             <Button variant="outline-primary" size="sm" onClick={() => handleEdit(schedule)}>✏️ Edit</Button>
                                         </div>
                                     </Card.Body>
@@ -838,6 +913,7 @@ const Planning = () => {
                                                                             {/* Footer */}
                                                                             <div className="d-flex align-items-center pt-1 mt-1 border-top" onClick={(e) => e.stopPropagation()}>
                                                                                 {isMoving && <span className="small text-danger fw-bold">PICKED UP</span>}
+                                                                                <Button variant="outline-primary" size="sm" className="border-0 px-1 py-0" style={{ fontSize: '0.6rem' }} onClick={(e) => { e.stopPropagation(); openTimeEdit(s); }}>⏰</Button>
                                                                                 <Button variant="outline-secondary" size="sm" className="border-0 px-1 py-0 ms-auto" style={{ fontSize: '0.6rem' }} onClick={(e) => { e.stopPropagation(); copyJury(s); }}>📋 Copy</Button>
                                                                             </div>
                                                                         </div>
