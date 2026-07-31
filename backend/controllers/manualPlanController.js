@@ -32,9 +32,9 @@ const autoPlanManual = async (req, res) => {
             return res.status(400).json({ message: "semester and courseCode are required" });
         }
 
-        const theses = await Thesis.find({ semester, courseCode, status: "approved" }).sort({ title: 1 });
+        const theses = await Thesis.find({ semester, courseCode, status: { $ne: "completed" } }).sort({ title: 1 });
         if (theses.length === 0) {
-            return res.status(400).json({ message: `No approved theses for course code ${courseCode}.` });
+            return res.status(400).json({ message: `No theses for course code ${courseCode} in this semester.` });
         }
 
         const professors = await User.find({ role: { $in: ["professor", "admin"] } }).sort({ name: 1 });

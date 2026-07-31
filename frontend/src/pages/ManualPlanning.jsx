@@ -74,7 +74,7 @@ const ManualPlanning = () => {
     const handleAutoPlan = async () => {
         if (!activeSemester?._id || !courseCode) return;
         if (!(await confirm(
-            `Run manual auto-planning for the approved theses of course ${courseCode} (${activeSemester.displayName})?\n\nIt will overwrite the current manual plan for this course with a new one arranged like the reference Excel (days, Sang/Chieu sessions, committees of 3 professors with thesis counts).`,
+            `Run manual auto-planning for the theses of course ${courseCode} (${activeSemester.displayName})?\n\nIt will overwrite the current manual plan for this course with a new one arranged like the reference Excel (days, Sang/Chieu sessions, committees of 3 professors with thesis counts).`,
             "Run Manual Planning"
         ))) return;
 
