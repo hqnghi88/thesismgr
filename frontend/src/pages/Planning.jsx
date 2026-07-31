@@ -332,7 +332,11 @@ const Planning = () => {
             notify("No active semester selected");
             return;
         }
-        if (!(await confirm(`Are you sure you want to delete ALL schedules for ${activeSemester.displayName}? This will reset all thesis statuses back to 'approved'.`))) return;
+        if (!(await confirm(
+            `Are you sure you want to delete ALL schedules for ${activeSemester.displayName}? This will reset all thesis statuses back to 'approved'. This cannot be undone.`,
+            "Danger: Delete All Schedules",
+            { requirePhrase: "DELETE" }
+        ))) return;
         try {
             const params = { semester: activeSemester._id };
             const res = await axios.delete(`${import.meta.env.VITE_API_URL}/api/schedule/all`, {

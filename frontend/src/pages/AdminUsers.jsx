@@ -72,7 +72,11 @@ const AdminUsers = () => {
     };
 
     const handleDeleteByRole = async (role) => {
-        if (!(await confirm(`Are you sure you want to delete ALL ${role}s? This action cannot be undone.`))) return;
+        if (!(await confirm(
+            `Are you sure you want to delete ALL ${role}s? This action cannot be undone.`,
+            "Danger: Delete All Users",
+            { requirePhrase: "DELETE" }
+        ))) return;
         try {
             const res = await axios.delete(`${import.meta.env.VITE_API_URL}/api/users/role/${role}`, {
                 headers: { Authorization: `Bearer ${token}` },
