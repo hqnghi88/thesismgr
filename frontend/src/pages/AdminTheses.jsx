@@ -81,13 +81,15 @@ const AdminTheses = () => {
     };
 
     const handleDeleteAll = async () => {
-        if (!(await confirm("Are you sure you want to delete ALL theses for this semester? This action cannot be undone."))) return;
+        if (!activeSemester?._id) {
+            notify("No active semester selected");
+            return;
+        }
+        if (!(await confirm(`Are you sure you want to delete ALL theses for ${activeSemester.displayName}? This action cannot be undone.`))) return;
         try {
-            const params = {};
-            if (activeSemester?._id) params.semester = activeSemester._id;
             const res = await axios.delete(`${import.meta.env.VITE_API_URL}/api/admin/theses/all`, {
                 headers: { Authorization: `Bearer ${token}` },
-                params
+                params: { semester: activeSemester._id }
             });
             notify(res.data.message);
             fetchData();

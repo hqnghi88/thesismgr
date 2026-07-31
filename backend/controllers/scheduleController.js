@@ -279,15 +279,15 @@ const deleteAllSchedules = async (req, res) => {
     try {
         console.log("Admin clearing schedules...");
 
-        let scheduleQuery = {};
-        let thesisQuery = { status: 'scheduled' };
-
-        if (req.query.semester) {
-            const thesesInSemester = await Thesis.find({ semester: req.query.semester }).select('_id');
-            const thesisIds = thesesInSemester.map(t => t._id);
-            scheduleQuery.thesis = { $in: thesisIds };
-            thesisQuery._id = { $in: thesisIds };
+        const semester = req.query.semester;
+        if (!semester) {
+            return res.status(400).json({ message: "semester query parameter is required to prevent accidental data loss" });
         }
+
+        const thesesInSemester = await Thesis.find({ semester }).select('_id');
+        const thesisIds = thesesInSemester.map(t => t._id);
+        const scheduleQuery = { thesis: { $in: thesisIds } };
+        const thesisQuery = { _id: { $in: thesisIds }, status: 'scheduled' };
 
         const deleteResult = await Schedule.deleteMany(scheduleQuery);
         console.log(`Deleted ${deleteResult.deletedCount || 0} schedules.`);

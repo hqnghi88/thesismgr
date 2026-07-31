@@ -104,17 +104,15 @@ const Schedule = require("../models/Schedule");
 
 const deleteAllTheses = async (req, res) => {
     try {
-        let thesisQuery = {};
-        let scheduleQuery = {};
-        if (req.query.semester) {
-            thesisQuery.semester = req.query.semester;
-            const theses = await Thesis.find(thesisQuery).select('_id');
-            const thesisIds = theses.map(t => t._id);
-            scheduleQuery.thesis = { $in: thesisIds };
+        const semester = req.query.semester;
+        if (!semester) {
+            return res.status(400).json({ message: "semester query parameter is required to prevent accidental data loss" });
         }
-        await Schedule.deleteMany(scheduleQuery);
-        const result = await Thesis.deleteMany(thesisQuery);
-        res.status(200).json({ message: `Successfully deleted all schedules and ${result.deletedCount} theses` });
+        const theses = await Thesis.find({ semester }).select('_id');
+        const thesisIds = theses.map(t => t._id);
+        await Schedule.deleteMany({ thesis: { $in: thesisIds } });
+        const result = await Thesis.deleteMany({ semester });
+        res.status(200).json({ message: `Successfully deleted all schedules and ${result.deletedCount} theses for this semester` });
     } catch (error) {
         console.error("Admin Delete All Theses Error:", error.message);
         res.status(500).json({ message: "Server Error" });
