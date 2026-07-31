@@ -118,6 +118,7 @@ const importThesesFromExcel = async (req, res) => {
             let title = row['Tên đề tài'] || row['Thesis Title'] || row['Tên đề tài (Tiếng Việt và Tiếng Anh)'] || row['Tên luận văn'] || "";
             let titleEn = row['English Title'] || row['Tên đề tài tiếng Anh'] || row['Tên luận văn tiếng Anh'] || row['Thesis Title (En)'] || "";
             const supervisorName = row['GVHD'] || row['Người hướng dẫn'] || row['Supervisor'] || row['Cán bộ hướng dẫn'] || row['Cán bộ hướng dẫn khoa học'];
+            const courseCode = row['Mã MH'] || row['Mã môn học'] || row['Mã Môn Học'] || row['Mã MH (Course Code)'] || row['Course Code'] || row['Mã học phần'] || row['Mã HP'] || row['Course ID'] || "";
 
             // If only one title is found but it contains both, split it
             // Patterns like "Vi (En)" or "Vi / En" or "Vi - En"
@@ -206,7 +207,8 @@ const importThesesFromExcel = async (req, res) => {
                 const updates = {
                     supervisor: professor._id,
                     title: String(title).trim(),
-                    titleEn: String(titleEn).trim()
+                    titleEn: String(titleEn).trim(),
+                    courseCode: String(courseCode || "").trim()
                 };
                 
                 // Only reset status to 'approved' if it's currently 'submitted' or 'under_review'
@@ -224,6 +226,7 @@ const importThesesFromExcel = async (req, res) => {
                     semester,
                     title: String(title).trim(),
                     titleEn: String(titleEn).trim(),
+                    courseCode: String(courseCode || "").trim(),
                     status: "approved"
                 });
                 await newThesis.save();

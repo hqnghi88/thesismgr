@@ -17,6 +17,10 @@ const thesisSchema = new mongoose.Schema(
             ref: "Semester",
             required: true,
         },
+        courseCode: {
+            type: String,
+            trim: true,
+        },
         title: {
             type: String,
             required: true,

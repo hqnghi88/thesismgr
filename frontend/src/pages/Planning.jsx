@@ -687,7 +687,7 @@ const Planning = () => {
                                             <div><strong>Start:</strong> {new Date(schedule.startTime).toLocaleString()}</div>
                                         </div>
                                         <div className="d-flex flex-row flex-wrap gap-3 small mb-3 border-top pt-2 mt-2">
-                                            <div className="d-flex align-items-center gap-1">👤 <strong className="me-1">Std:</strong> {schedule.student?.name}</div>
+                                            <div className="d-flex align-items-center gap-1">👤 <strong className="me-1">Std:</strong> {schedule.student?.name} {schedule.thesis?.courseCode && <Badge bg="primary">{schedule.thesis.courseCode}</Badge>}</div>
                                             <div className="d-flex align-items-center gap-1">👨‍🏫 <strong className="me-1">SV:</strong> {schedule.supervisor?.name || "None"}</div>
                                             <div className="d-flex align-items-center gap-1">
                                                 🎯 <strong className="me-1">PR:</strong>
@@ -785,7 +785,9 @@ const Planning = () => {
                                                                                 />
                                                                             </div>
                                                                             {/* Student */}
-                                                                            <div className="text-truncate fw-semibold text-dark mb-1" style={{ fontSize: '0.68rem' }}>👤 {s.student?.name}</div>
+                                                                            <div className="text-truncate fw-semibold text-dark mb-1" style={{ fontSize: '0.68rem' }}>
+                                                                                👤 {s.student?.name} {s.thesis?.courseCode && <span className="text-primary fw-bold">({s.thesis.courseCode})</span>}
+                                                                            </div>
                                                                             {/* Jury rows — BIG & clickable */}
                                                                             <div className="d-flex flex-column gap-1 mt-auto border-top pt-1" onClick={(e) => e.stopPropagation()}>
                                                                                 {/* Supervisor — read-only */}
