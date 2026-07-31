@@ -7,6 +7,7 @@ const thesisRoutes = require("./routes/thesisRoutes");
 const scheduleRoutes = require("./routes/scheduleRoutes");
 const importRoutes = require("./routes/importRoutes");
 const semesterRoutes = require("./routes/semesterRoutes");
+const backupRoutes = require("./routes/backupRoutes");
 
 
 dotenv.config();
@@ -26,6 +27,7 @@ app.use('/api', thesisRoutes);
 app.use('/api', scheduleRoutes);
 app.use('/api', importRoutes);
 app.use('/api', semesterRoutes);
+app.use('/api', backupRoutes);
 
 
 // Connect to Mongoose and start server                             // process.env.MONGO_URI -> 

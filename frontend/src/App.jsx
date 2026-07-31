@@ -8,6 +8,7 @@ import Planning from "./pages/Planning";
 import AdminUsers from "./pages/AdminUsers";
 import AdminTheses from "./pages/AdminTheses";
 import AdminSemesters from "./pages/AdminSemesters";
+import AdminBackup from "./pages/AdminBackup";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { Navigate } from "react-router-dom";
 import Navbar from "./components/Navbar";
@@ -77,6 +78,14 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <AdminSemesters />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/admin/backup"
+                element={
+                  <ProtectedRoute>
+                    <AdminBackup />
                   </ProtectedRoute>
                 }
               />

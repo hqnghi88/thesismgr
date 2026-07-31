@@ -69,6 +69,7 @@ const NavigationBar = () => {
                     <Nav.Link as={Link} to="/admin/users" className="text-white">Users</Nav.Link>
                     <Nav.Link as={Link} to="/admin/theses" className="text-white">All Theses</Nav.Link>
                     <Nav.Link as={Link} to="/admin/semesters" className="text-white">Semesters</Nav.Link>
+                    <Nav.Link as={Link} to="/admin/backup" className="text-white">Backup</Nav.Link>
                   </>
                 )}
                 <Button variant="outline-light" size="sm" onClick={handleLogout} className="ms-2">
