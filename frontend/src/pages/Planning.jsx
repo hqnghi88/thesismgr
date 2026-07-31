@@ -513,7 +513,7 @@ const Planning = () => {
                                             className="rounded-pill px-4 fw-bold"
                                             onClick={() => handleBulkJuryAssign(juryClipboard.principal._id, juryClipboard.examinator._id)}
                                         >
-                                            ✅ Assign: {juryClipboard.principal.name.split(' ').pop()} + {juryClipboard.examinator.name.split(' ').pop()}
+                                            ✅ Assign: {juryClipboard.principal.name} + {juryClipboard.examinator.name}
                                         </Button>
                                     ) : (
                                         <div className="d-flex align-items-center px-3 py-1 bg-light rounded-pill border">
@@ -560,12 +560,23 @@ const Planning = () => {
                     {conflictDetails.length > 0 && (
                         <div className="px-3 pb-3">
                             <div className="alert alert-warning py-2 mb-0 small">
-                                <strong>⚠️ Conflicts detected:</strong>{' '}
-                                {conflictDetails.map((d, i) => (
-                                    <span key={i} className="me-3">
-                                        <strong>{d.professor}</strong> is double-booked at {new Date(new Date(d.time).getTime() + 7*3600000).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' })}
-                                    </span>
-                                ))}
+                                <strong>⚠️ Conflicts detected:</strong>
+                                <ul className="mb-0 mt-1 ps-3">
+                                    {conflictDetails.map((d, i) => (
+                                        <li key={i} className="mb-1">
+                                            <strong>{d.professor}</strong> is double-booked at{' '}
+                                            {new Date(new Date(d.time).getTime() + 7*3600000).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' })}
+                                            {d.slotLabels && d.slotLabels.length > 0 && (
+                                                <>
+                                                    {' — '}
+                                                    {d.slotLabels.map((label, j) => (
+                                                        <span key={j} className="text-danger">{j > 0 && ' & '}{label}</span>
+                                                    ))}
+                                                </>
+                                            )}
+                                        </li>
+                                    ))}
+                                </ul>
                             </div>
                         </div>
                     )}
@@ -793,13 +804,13 @@ const Planning = () => {
                                                                                 {/* Supervisor — read-only */}
                                                                                 <div className="d-flex align-items-center gap-1 px-1 py-1 rounded" style={{ backgroundColor: '#f0fdf4' }}>
                                                                                     <span style={{ fontSize: '0.7rem', color: '#16a34a', fontWeight: 700, minWidth: '22px' }}>SV</span>
-                                                                                    <span className="fw-bold text-success text-truncate" style={{ fontSize: '0.92rem' }}>{s.supervisor?.name?.split(' ').pop() || <span className="text-danger">⚠️</span>}</span>
+                                                                                    <span className="fw-bold text-success text-truncate" title={s.supervisor?.name} style={{ fontSize: '0.92rem' }}>{s.supervisor?.name || <span className="text-danger">⚠️</span>}</span>
                                                                                 </div>
                                                                                 {/* Principal — clickable dropdown */}
                                                                                 <Dropdown onToggle={(isOpen) => { setIsDropdownSearching(isOpen); if (!isOpen) setProfSearch(''); }}>
                                                                                     <Dropdown.Toggle as="div" className="d-flex align-items-center gap-1 px-1 py-1 rounded" style={{ backgroundColor: '#eff6ff', cursor: 'pointer' }}>
                                                                                         <span style={{ fontSize: '0.7rem', color: '#1d4ed8', fontWeight: 700, minWidth: '22px' }}>PR</span>
-                                                                                        <span className="fw-bold text-primary text-truncate" style={{ fontSize: '0.92rem' }}>{s.principal?.name?.split(' ').pop() || <span className="text-danger">⚠️</span>}</span>
+                                                                                        <span className="fw-bold text-primary text-truncate" title={s.principal?.name} style={{ fontSize: '0.92rem' }}>{s.principal?.name || <span className="text-danger">⚠️</span>}</span>
                                                                                         <span className="ms-auto text-muted" style={{ fontSize: '0.65rem' }}>▾</span>
                                                                                     </Dropdown.Toggle>
                                                                                     <Dropdown.Menu style={{ maxHeight: '350px', overflowY: 'auto', minWidth: '250px' }}>
@@ -813,7 +824,7 @@ const Planning = () => {
                                                                                 <Dropdown onToggle={(isOpen) => { setIsDropdownSearching(isOpen); if (!isOpen) setProfSearch(''); }}>
                                                                                     <Dropdown.Toggle as="div" className="d-flex align-items-center gap-1 px-1 py-1 rounded" style={{ backgroundColor: '#faf5ff', cursor: 'pointer' }}>
                                                                                         <span style={{ fontSize: '0.7rem', color: '#7c3aed', fontWeight: 700, minWidth: '22px' }}>EX</span>
-                                                                                        <span className="fw-bold text-truncate" style={{ fontSize: '0.92rem', color: '#7c3aed' }}>{s.examinator?.name?.split(' ').pop() || <span className="text-danger">⚠️</span>}</span>
+                                                                                        <span className="fw-bold text-truncate" title={s.examinator?.name} style={{ fontSize: '0.92rem', color: '#7c3aed' }}>{s.examinator?.name || <span className="text-danger">⚠️</span>}</span>
                                                                                         <span className="ms-auto text-muted" style={{ fontSize: '0.65rem' }}>▾</span>
                                                                                     </Dropdown.Toggle>
                                                                                     <Dropdown.Menu style={{ maxHeight: '350px', overflowY: 'auto', minWidth: '250px' }}>

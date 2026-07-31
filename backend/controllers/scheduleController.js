@@ -497,7 +497,9 @@ const checkAllConflicts = async (req, res) => {
             query.thesis = { $in: thesesInSemester.map(t => t._id) };
         }
         const schedules = await Schedule.find(query)
-            .populate('principal examinator supervisor', 'name _id');
+            .populate('principal examinator supervisor', 'name _id')
+            .populate('thesis', 'title student')
+            .populate('student', 'name');
 
         const timeSlotMap = {};
         schedules.forEach(s => {
@@ -508,6 +510,12 @@ const checkAllConflicts = async (req, res) => {
 
         const conflictedIds = new Set();
         const details = [];
+
+        const slotLabel = (s) => {
+            const stuName = s.student?.name || (s.thesis && s.thesis.student) || "?";
+            const title = s.thesis?.title || "?";
+            return `${stuName} (${title})`;
+        };
 
         Object.entries(timeSlotMap).forEach(([timeKey, slotSchedules]) => {
             if (slotSchedules.length < 2) return;
@@ -524,7 +532,11 @@ const checkAllConflicts = async (req, res) => {
             Object.entries(profMap).forEach(([, { name, scheduleIds }]) => {
                 if (scheduleIds.length > 1) {
                     scheduleIds.forEach(id => conflictedIds.add(id));
-                    details.push({ professor: name, time: timeKey, scheduleIds });
+                    const slotLabels = scheduleIds.map(id => {
+                        const sc = slotSchedules.find(x => x._id.toString() === id);
+                        return sc ? slotLabel(sc) : id;
+                    });
+                    details.push({ professor: name, time: timeKey, scheduleIds, slotLabels });
                 }
             });
         });
