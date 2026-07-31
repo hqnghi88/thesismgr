@@ -3,6 +3,7 @@ import axios from "axios";
 import { Container, Row, Col, Card, Button, Modal, Form, Badge, ListGroup, Alert, ButtonGroup, Table, Dropdown } from "react-bootstrap";
 import { useNotification } from "../context/NotificationContext";
 import { useSemester } from "../context/SemesterContext";
+import ManualPlanning from "./ManualPlanning";
 
 const Planning = () => {
     const { notify, confirm } = useNotification();
@@ -552,6 +553,7 @@ const Planning = () => {
                         {activeSemester && <p className="text-muted mb-0 mt-1">{activeSemester.displayName}</p>}
                     </div>
                     <ButtonGroup size="sm">
+                        <Button variant={viewMode === 'manual' ? 'primary' : 'outline-primary'} onClick={() => setViewMode('manual')}>🗓️ Manual</Button>
                         <Button variant={viewMode === 'timetable' ? 'primary' : 'outline-primary'} onClick={() => setViewMode('timetable')}>📊 Timetable</Button>
                         <Button variant={viewMode === 'cards' ? 'primary' : 'outline-primary'} onClick={() => setViewMode('cards')}>📋 List View</Button>
                         <Button variant={viewMode === 'summary' ? 'primary' : 'outline-primary'} onClick={() => setViewMode('summary')}>📈 Summary</Button>
@@ -747,6 +749,8 @@ const Planning = () => {
                         </Form>
                     </Modal.Body>
                 </Modal>
+
+                {viewMode === 'manual' && <ManualPlanning />}
 
                 {viewMode === 'cards' && (
                     <Row className="g-4">

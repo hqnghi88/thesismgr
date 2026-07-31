@@ -8,6 +8,7 @@ const scheduleRoutes = require("./routes/scheduleRoutes");
 const importRoutes = require("./routes/importRoutes");
 const semesterRoutes = require("./routes/semesterRoutes");
 const backupRoutes = require("./routes/backupRoutes");
+const manualPlanRoutes = require("./routes/manualPlanRoutes");
 
 
 dotenv.config();
@@ -28,6 +29,7 @@ app.use('/api', scheduleRoutes);
 app.use('/api', importRoutes);
 app.use('/api', semesterRoutes);
 app.use('/api', backupRoutes);
+app.use('/api', manualPlanRoutes);
 
 
 // Connect to Mongoose and start server                             // process.env.MONGO_URI -> 
