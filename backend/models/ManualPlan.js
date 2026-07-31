@@ -57,11 +57,17 @@ const manualPlanSchema = new mongoose.Schema(
             type: mongoose.Schema.Types.ObjectId,
             ref: "Semester",
             required: true,
-            unique: true,
+        },
+        courseCode: {
+            type: String,
+            trim: true,
+            required: true,
         },
         days: [daySchema],
     },
     { timestamps: true }
 );
+
+manualPlanSchema.index({ semester: 1, courseCode: 1 }, { unique: true });
 
 module.exports = mongoose.model("ManualPlan", manualPlanSchema);

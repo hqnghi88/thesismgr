@@ -13,11 +13,11 @@ const populatePlan = (query) =>
 
 const getManualPlan = async (req, res) => {
     try {
-        const { semester } = req.query;
-        if (!semester) {
-            return res.status(400).json({ message: "semester query parameter is required" });
+        const { semester, courseCode } = req.query;
+        if (!semester || !courseCode) {
+            return res.status(400).json({ message: "semester and courseCode query parameters are required" });
         }
-        const plan = await populatePlan(ManualPlan.findOne({ semester }));
+        const plan = await populatePlan(ManualPlan.findOne({ semester, courseCode }));
         res.json(plan);
     } catch (error) {
         console.error("getManualPlan Error:", error);
@@ -27,14 +27,14 @@ const getManualPlan = async (req, res) => {
 
 const autoPlanManual = async (req, res) => {
     try {
-        const { semester, startDate, numDays = 3, roomCount = 3, sessionsPerDay = 2 } = req.body;
-        if (!semester) {
-            return res.status(400).json({ message: "semester is required" });
+        const { semester, courseCode, startDate, numDays = 3, roomCount = 3, sessionsPerDay = 2 } = req.body;
+        if (!semester || !courseCode) {
+            return res.status(400).json({ message: "semester and courseCode are required" });
         }
 
-        const theses = await Thesis.find({ semester, status: "approved" }).sort({ title: 1 });
+        const theses = await Thesis.find({ semester, courseCode, status: "approved" }).sort({ title: 1 });
         if (theses.length === 0) {
-            return res.status(400).json({ message: "No approved theses for this semester." });
+            return res.status(400).json({ message: `No approved theses for course code ${courseCode}.` });
         }
 
         const professors = await User.find({ role: { $in: ["professor", "admin"] } }).sort({ name: 1 });
@@ -85,11 +85,11 @@ const autoPlanManual = async (req, res) => {
             allCommittees[i % allCommittees.length].thesisIds.push(t._id);
         });
 
-        await ManualPlan.deleteOne({ semester });
-        const plan = new ManualPlan({ semester, days });
+        await ManualPlan.deleteOne({ semester, courseCode });
+        const plan = new ManualPlan({ semester, courseCode, days });
         await plan.save();
 
-        const saved = await populatePlan(ManualPlan.findOne({ semester }));
+        const saved = await populatePlan(ManualPlan.findOne({ semester, courseCode }));
         res.status(201).json({
             message: "Manual planning completed.",
             thesisCount: theses.length,
@@ -103,9 +103,9 @@ const autoPlanManual = async (req, res) => {
 
 const saveManualPlan = async (req, res) => {
     try {
-        const { semester, days } = req.body;
-        if (!semester || !Array.isArray(days)) {
-            return res.status(400).json({ message: "semester and days array are required" });
+        const { semester, courseCode, days } = req.body;
+        if (!semester || !courseCode || !Array.isArray(days)) {
+            return res.status(400).json({ message: "semester, courseCode and days array are required" });
         }
 
         const cleanId = (v) => (v && v._id ? v._id : v) || null;
@@ -123,10 +123,10 @@ const saveManualPlan = async (req, res) => {
             })),
         }));
 
-        await ManualPlan.deleteOne({ semester });
-        const plan = new ManualPlan({ semester, days: cleanDays });
+        await ManualPlan.deleteOne({ semester, courseCode });
+        const plan = new ManualPlan({ semester, courseCode, days: cleanDays });
         await plan.save();
-        const saved = await populatePlan(ManualPlan.findOne({ semester }));
+        const saved = await populatePlan(ManualPlan.findOne({ semester, courseCode }));
         res.status(200).json({ message: "Manual plan saved.", plan: saved });
     } catch (error) {
         console.error("saveManualPlan Error:", error);
@@ -136,11 +136,11 @@ const saveManualPlan = async (req, res) => {
 
 const deleteManualPlan = async (req, res) => {
     try {
-        const { semester } = req.query;
-        if (!semester) {
-            return res.status(400).json({ message: "semester query parameter is required to prevent accidental data loss" });
+        const { semester, courseCode } = req.query;
+        if (!semester || !courseCode) {
+            return res.status(400).json({ message: "semester and courseCode query parameters are required to prevent accidental data loss" });
         }
-        await ManualPlan.deleteOne({ semester });
+        await ManualPlan.deleteOne({ semester, courseCode });
         res.status(200).json({ message: "Manual plan deleted." });
     } catch (error) {
         console.error("deleteManualPlan Error:", error);
@@ -150,16 +150,16 @@ const deleteManualPlan = async (req, res) => {
 
 const exportManualPlan = async (req, res) => {
     try {
-        const { semester } = req.query;
-        if (!semester) {
-            return res.status(400).json({ message: "semester query parameter is required" });
+        const { semester, courseCode } = req.query;
+        if (!semester || !courseCode) {
+            return res.status(400).json({ message: "semester and courseCode query parameters are required" });
         }
-        const plan = await populatePlan(ManualPlan.findOne({ semester }));
+        const plan = await populatePlan(ManualPlan.findOne({ semester, courseCode }));
         if (!plan) {
             return res.status(404).json({ message: "No manual plan to export" });
         }
 
-        const aoa = [];
+        const aoa = [[`MA HOC PHAN: ${plan.courseCode}`]];
         plan.days.forEach(day => {
             const dd = new Date(day.date);
             const dateLabel = `${dd.getUTCDate()}/${dd.getUTCMonth() + 1}`;
@@ -183,7 +183,7 @@ const exportManualPlan = async (req, res) => {
         const wb = xlsx.utils.book_new();
         const ws = xlsx.utils.aoa_to_sheet(aoa);
         ws["!cols"] = [{ wch: 12 }, { wch: 24 }, { wch: 6 }, { wch: 24 }, { wch: 6 }, { wch: 24 }, { wch: 6 }];
-        xlsx.utils.book_append_sheet(wb, ws, "Lich LVTN");
+        xlsx.utils.book_append_sheet(wb, ws, `Lich LVTN ${plan.courseCode}`);
         const buf = xlsx.write(wb, { type: "buffer", bookType: "xlsx" });
         res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         res.send(buf);

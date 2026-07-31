@@ -12,6 +12,8 @@ const ManualPlanning = () => {
     const [plan, setPlan] = useState(null);
     const [loading, setLoading] = useState(false);
     const [professors, setProfessors] = useState([]);
+    const [courseCodes, setCourseCodes] = useState([]);
+    const [courseCode, setCourseCode] = useState("");
     const [controls, setControls] = useState({
         startDate: new Date().toISOString().slice(0, 10),
         numDays: 3,
@@ -20,11 +22,26 @@ const ManualPlanning = () => {
     });
     const [editing, setEditing] = useState(null); // { dayIdx, sessIdx, commIdx, room, principal, examinator, supervisor }
 
-    const fetchPlan = async () => {
+    const fetchCourseCodes = async () => {
         if (!activeSemester?._id) return;
         try {
-            const res = await axios.get(`${import.meta.env.VITE_API_URL}/api/manual-plan`, {
+            const res = await axios.get(`${import.meta.env.VITE_API_URL}/api/admin/theses`, {
                 params: { semester: activeSemester._id },
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            const codes = [...new Set((res.data || []).map(t => t.courseCode).filter(Boolean))].sort();
+            setCourseCodes(codes);
+            setCourseCode(prev => (codes.includes(prev) ? prev : (codes[0] || "")));
+        } catch (err) {
+            console.error("Fetch course codes error:", err.response?.data || err.message);
+        }
+    };
+
+    const fetchPlan = async () => {
+        if (!activeSemester?._id || !courseCode) return;
+        try {
+            const res = await axios.get(`${import.meta.env.VITE_API_URL}/api/manual-plan`, {
+                params: { semester: activeSemester._id, courseCode },
                 headers: { Authorization: `Bearer ${token}` },
             });
             setPlan(res.data || null);
@@ -45,14 +62,19 @@ const ManualPlanning = () => {
     };
 
     useEffect(() => {
-        fetchPlan();
+        fetchCourseCodes();
         fetchProfessors();
     }, [activeSemester]);
 
+    useEffect(() => {
+        setPlan(null);
+        fetchPlan();
+    }, [courseCode, activeSemester]);
+
     const handleAutoPlan = async () => {
-        if (!activeSemester?._id) return;
+        if (!activeSemester?._id || !courseCode) return;
         if (!(await confirm(
-            `Run manual auto-planning for the approved theses of ${activeSemester.displayName}?\n\nIt will overwrite the current manual plan with a new one arranged like the reference Excel (days, Sang/Chieu sessions, committees of 3 professors with thesis counts).`,
+            `Run manual auto-planning for the approved theses of course ${courseCode} (${activeSemester.displayName})?\n\nIt will overwrite the current manual plan for this course with a new one arranged like the reference Excel (days, Sang/Chieu sessions, committees of 3 professors with thesis counts).`,
             "Run Manual Planning"
         ))) return;
 
@@ -60,6 +82,7 @@ const ManualPlanning = () => {
         try {
             const res = await axios.post(`${import.meta.env.VITE_API_URL}/api/manual-plan/auto-plan`, {
                 semester: activeSemester._id,
+                courseCode,
                 startDate: controls.startDate,
                 numDays: controls.numDays,
                 roomCount: controls.roomCount,
@@ -77,10 +100,11 @@ const ManualPlanning = () => {
     };
 
     const handleSave = async () => {
-        if (!plan || !activeSemester?._id) return;
+        if (!plan || !activeSemester?._id || !courseCode) return;
         try {
             await axios.put(`${import.meta.env.VITE_API_URL}/api/manual-plan`, {
                 semester: activeSemester._id,
+                courseCode,
                 days: plan.days,
             }, {
                 headers: { Authorization: `Bearer ${token}` },
@@ -93,14 +117,14 @@ const ManualPlanning = () => {
     };
 
     const handleClear = async () => {
-        if (!activeSemester?._id) return;
+        if (!activeSemester?._id || !courseCode) return;
         if (!(await confirm(
-            "Delete the manual plan for this semester?",
+            `Delete the manual plan for course ${courseCode}?`,
             "Delete Manual Plan"
         ))) return;
         try {
             await axios.delete(`${import.meta.env.VITE_API_URL}/api/manual-plan`, {
-                params: { semester: activeSemester._id },
+                params: { semester: activeSemester._id, courseCode },
                 headers: { Authorization: `Bearer ${token}` },
             });
             setPlan(null);
@@ -111,10 +135,10 @@ const ManualPlanning = () => {
     };
 
     const handleExport = async () => {
-        if (!activeSemester?._id || !plan) return;
+        if (!activeSemester?._id || !plan || !courseCode) return;
         try {
             const res = await axios.get(`${import.meta.env.VITE_API_URL}/api/manual-plan/export`, {
-                params: { semester: activeSemester._id },
+                params: { semester: activeSemester._id, courseCode },
                 headers: { Authorization: `Bearer ${token}` },
                 responseType: "blob",
             });
@@ -122,7 +146,7 @@ const ManualPlanning = () => {
             const url = window.URL.createObjectURL(blob);
             const link = document.createElement("a");
             link.href = url;
-            link.setAttribute("download", "Xep lich LVTN.xlsx");
+            link.setAttribute("download", `Xep lich LVTN ${courseCode}.xlsx`);
             document.body.appendChild(link);
             link.click();
             link.remove();
@@ -178,7 +202,17 @@ const ManualPlanning = () => {
                         session has up to 4 committees of 3 professors. Auto-planning
                         distributes the approved theses across the committees by count — no per-thesis details.
                     </p>
-                    <Row className="g-3 mb-3">
+                    <Row className="g-3 mb-2">
+                        <Col md={4} sm={6}>
+                            <Form.Label className="fw-semibold small mb-1">Course Code</Form.Label>
+                            <Form.Select
+                                value={courseCode}
+                                onChange={(e) => setCourseCode(e.target.value)}
+                            >
+                                {courseCodes.length === 0 && <option value="">No courses found</option>}
+                                {courseCodes.map(c => <option key={c} value={c}>{c}</option>)}
+                            </Form.Select>
+                        </Col>
                         <Col md={3} sm={6}>
                             <Form.Label className="fw-semibold small mb-1">Start Date</Form.Label>
                             <Form.Control
@@ -197,7 +231,14 @@ const ManualPlanning = () => {
                                 onChange={(e) => setControls({ ...controls, numDays: parseInt(e.target.value) || 1 })}
                             />
                         </Col>
-                        <Col md={3} sm={6}>
+                        <Col md={3} sm={6} className="d-flex align-items-end">
+                            <Button variant="success" className="w-100" onClick={handleAutoPlan} disabled={loading || !courseCode}>
+                                {loading ? "Planning..." : "✨ Run Auto-Planning"}
+                            </Button>
+                        </Col>
+                    </Row>
+                    <Row className="g-3 mb-3">
+                        <Col md={4} sm={6}>
                             <Form.Label className="fw-semibold small mb-1">Committees per Session</Form.Label>
                             <Form.Select
                                 value={controls.roomCount}
@@ -209,7 +250,7 @@ const ManualPlanning = () => {
                                 <option value="4">4 Committees</option>
                             </Form.Select>
                         </Col>
-                        <Col md={2} sm={6}>
+                        <Col md={3} sm={6}>
                             <Form.Label className="fw-semibold small mb-1">Sessions per Day</Form.Label>
                             <Form.Select
                                 value={controls.sessionsPerDay}
@@ -219,14 +260,10 @@ const ManualPlanning = () => {
                                 <option value="1">Sang only</option>
                             </Form.Select>
                         </Col>
-                        <Col md={2} sm={12} className="d-flex align-items-end">
-                            <Button variant="success" className="w-100" onClick={handleAutoPlan} disabled={loading}>
-                                {loading ? "Planning..." : "✨ Run Auto-Planning"}
-                            </Button>
-                        </Col>
                     </Row>
                     {plan && (
                         <div className="d-flex gap-2 flex-wrap">
+                            <Badge bg="secondary">Course {courseCode}</Badge>
                             <Badge bg="secondary">{totalTheses} theses planned</Badge>
                             <Button variant="outline-success" size="sm" onClick={handleSave}>💾 Save Changes</Button>
                             <Button variant="outline-primary" size="sm" onClick={handleExport}>📥 Export Excel</Button>
@@ -242,8 +279,8 @@ const ManualPlanning = () => {
                 <Card className="border-0 shadow-sm">
                     <Card.Body className="text-center text-muted py-5">
                         <div className="fs-1 mb-3">🗓️</div>
-                        <h5>No manual plan yet</h5>
-                        <p className="mb-0">Set the options above and click <b>Run Auto-Planning</b> to build the plan.</p>
+                        <h5>{courseCode ? `No manual plan for ${courseCode} yet` : "No course code available"}</h5>
+                        <p className="mb-0">Select a course code, set the options above and click <b>Run Auto-Planning</b> to build the plan.</p>
                     </Card.Body>
                 </Card>
             )}
