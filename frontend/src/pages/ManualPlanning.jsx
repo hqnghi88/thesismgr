@@ -1,8 +1,30 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
-import { Container, Row, Col, Card, Button, Modal, Form, Table, Alert, Badge } from "react-bootstrap";
+import { Container, Row, Col, Card, Button, Form, Alert, Badge, Dropdown } from "react-bootstrap";
 import { useNotification } from "../context/NotificationContext";
 import { useSemester } from "../context/SemesterContext";
+
+const ProfessorDropdown = ({ profs, value, label, bg, color, onSelect }) => {
+    const [open, setOpen] = useState(false);
+    const [search, setSearch] = useState("");
+    return (
+        <Dropdown show={open} onToggle={(isOpen) => { setOpen(isOpen); if (!isOpen) setSearch(''); }}>
+            <Dropdown.Toggle as="div" className="d-flex align-items-center gap-1 px-2 py-2" style={{ backgroundColor: bg, cursor: 'pointer' }}>
+                <span style={{ fontSize: '0.7rem', color, fontWeight: 700, minWidth: '24px' }}>{label}</span>
+                <span className="fw-bold text-truncate" title={value?.name} style={{ fontSize: '0.9rem', color }}>{value?.name || <span className="text-danger">⚠️</span>}</span>
+                <span className="ms-auto text-muted" style={{ fontSize: '0.65rem' }}>▾</span>
+            </Dropdown.Toggle>
+            <Dropdown.Menu style={{ maxHeight: '350px', overflowY: 'auto', minWidth: '240px' }}>
+                <div className="px-3 py-1 border-bottom bg-light sticky-top">
+                    <Form.Control size="sm" placeholder="Search professor..." value={search} onChange={(e) => setSearch(e.target.value)} onClick={(e) => e.stopPropagation()} autoFocus />
+                </div>
+                {profs.filter(p => (p.name || '').toLowerCase().includes(search.toLowerCase())).map(p => (
+                    <Dropdown.Item key={p._id} onClick={() => { onSelect(p._id); setSearch(''); }} active={p._id === value?._id}>{p.name}</Dropdown.Item>
+                ))}
+            </Dropdown.Menu>
+        </Dropdown>
+    );
+};
 
 const ManualPlanning = () => {
     const { notify, confirm } = useNotification();
@@ -20,7 +42,6 @@ const ManualPlanning = () => {
         roomCount: 3,
         sessionsPerDay: 2,
     });
-    const [editing, setEditing] = useState(null); // { dayIdx, sessIdx, commIdx, room, principal, examinator, supervisor }
 
     const fetchCourseCodes = async () => {
         if (!activeSemester?._id) return;
@@ -99,20 +120,33 @@ const ManualPlanning = () => {
         }
     };
 
-    const handleSave = async () => {
+    const quickSwapMember = async (dayIdx, sessIdx, commIdx, role, newProfId) => {
         if (!plan || !activeSemester?._id || !courseCode) return;
+        const newPlan = {
+            ...plan,
+            days: plan.days.map((d, di) => ({
+                ...d,
+                sessions: d.sessions.map((s, si) => ({
+                    ...s,
+                    committees: s.committees.map((c, ci) => (di === dayIdx && si === sessIdx && ci === commIdx
+                        ? { ...c, [role]: professors.find(p => p._id === newProfId) || c[role] }
+                        : c)),
+                })),
+            })),
+        };
+        setPlan(newPlan);
         try {
             await axios.put(`${import.meta.env.VITE_API_URL}/api/manual-plan`, {
                 semester: activeSemester._id,
                 courseCode,
-                days: plan.days,
+                days: newPlan.days,
             }, {
                 headers: { Authorization: `Bearer ${token}` },
             });
-            notify("Manual plan saved");
             fetchPlan();
         } catch (err) {
-            notify(err.response?.data?.message || "Error saving manual plan");
+            notify(err.response?.data?.message || "Error updating committee");
+            fetchPlan();
         }
     };
 
@@ -153,32 +187,6 @@ const ManualPlanning = () => {
         } catch (err) {
             notify(err.response?.data?.message || "Error exporting manual plan");
         }
-    };
-
-    const openEdit = (dayIdx, sessIdx, commIdx) => {
-        const c = plan.days[dayIdx].sessions[sessIdx].committees[commIdx];
-        setEditing({
-            dayIdx,
-            sessIdx,
-            commIdx,
-            room: c.room || "",
-            principal: c.principal?._id || "",
-            examinator: c.examinator?._id || "",
-            supervisor: c.supervisor?._id || "",
-        });
-    };
-
-    const saveEdit = () => {
-        const { dayIdx, sessIdx, commIdx } = editing;
-        const newPlan = { ...plan, days: plan.days.map(d => ({ ...d })) };
-        const committee = newPlan.days[dayIdx].sessions[sessIdx].committees[commIdx];
-        committee.room = editing.room;
-        committee.principal = professors.find(p => p._id === editing.principal) || committee.principal;
-        committee.examinator = professors.find(p => p._id === editing.examinator) || committee.examinator;
-        committee.supervisor = professors.find(p => p._id === editing.supervisor) || committee.supervisor;
-        setPlan(newPlan);
-        setEditing(null);
-        notify("Committee updated — click Save Changes to persist");
     };
 
     const dateLabel = (d) => {
@@ -266,7 +274,6 @@ const ManualPlanning = () => {
                         <div className="d-flex gap-2 flex-wrap">
                             <Badge bg="secondary">Course {courseCode}</Badge>
                             <Badge bg="secondary">{totalTheses} theses planned</Badge>
-                            <Button variant="outline-success" size="sm" onClick={handleSave}>💾 Save Changes</Button>
                             <Button variant="outline-primary" size="sm" onClick={handleExport}>📥 Export Excel</Button>
                             <Button variant="outline-danger" size="sm" onClick={handleClear}>🗑 Delete Plan</Button>
                         </div>
@@ -297,78 +304,48 @@ const ManualPlanning = () => {
                                 <h6 className={`fw-bold mb-2 ${sess.session === "Sang" ? "text-primary" : "text-warning"}`}>
                                     {sess.session}
                                 </h6>
-                                <div className="table-responsive">
-                                    <Table bordered size="sm" className="mb-0 bg-white text-center align-middle">
-                                        <thead className="table-light">
-                                            <tr>
-                                                {sess.committees.map((c, commIdx) => (
-                                                    <th key={commIdx} className="align-middle">
-                                                        <button
-                                                            className="btn btn-sm btn-outline-secondary"
-                                                            style={{ cursor: "pointer", whiteSpace: "nowrap" }}
-                                                            onClick={() => openEdit(dayIdx, sessIdx, commIdx)}
-                                                            title="Edit committee"
-                                                        >
-                                                            <span className="fw-bold">{c.principal?.name || "—"}</span>{" "}
-                                                            <span className="text-primary fw-bold">{c.thesisIds?.length || 0}</span>
-                                                        </button>
-                                                    </th>
-                                                ))}
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            <tr>
-                                                {sess.committees.map((c, commIdx) => (
-                                                    <td key={commIdx}>{c.examinator?.name || "—"}</td>
-                                                ))}
-                                            </tr>
-                                            <tr>
-                                                {sess.committees.map((c, commIdx) => (
-                                                    <td key={commIdx}>{c.supervisor?.name || "—"}</td>
-                                                ))}
-                                            </tr>
-                                        </tbody>
-                                    </Table>
+                                <div className="d-flex flex-wrap gap-3">
+                                    {sess.committees.map((c, commIdx) => (
+                                        <div key={commIdx} className="border rounded shadow-sm bg-white overflow-hidden" style={{ width: '280px' }}>
+                                            <div className="d-flex justify-content-between align-items-center px-2 py-1 border-bottom bg-light">
+                                                <span className="small fw-bold text-muted">{c.room || `Committee ${commIdx + 1}`}</span>
+                                                <span className="d-inline-flex align-items-center gap-1">
+                                                    <span className="small text-muted">theses</span>
+                                                    <Badge bg="primary">{c.thesisIds?.length || 0}</Badge>
+                                                </span>
+                                            </div>
+                                            <div className="d-flex align-items-center gap-1 px-2 py-2 border-bottom" style={{ backgroundColor: '#f0fdf4' }}>
+                                                <span style={{ fontSize: '0.7rem', color: '#16a34a', fontWeight: 700, minWidth: '24px' }}>SV</span>
+                                                <span className="fw-bold text-success text-truncate" title={c.principal?.name} style={{ fontSize: '0.9rem' }}>{c.principal?.name || '—'}</span>
+                                            </div>
+                                            <div className="border-bottom">
+                                                <ProfessorDropdown
+                                                    label="M2"
+                                                    bg="#eff6ff"
+                                                    color="#1d4ed8"
+                                                    value={c.examinator}
+                                                    profs={professors}
+                                                    onSelect={(pid) => quickSwapMember(dayIdx, sessIdx, commIdx, 'examinator', pid)}
+                                                />
+                                            </div>
+                                            <div>
+                                                <ProfessorDropdown
+                                                    label="M3"
+                                                    bg="#faf5ff"
+                                                    color="#7c3aed"
+                                                    value={c.supervisor}
+                                                    profs={professors}
+                                                    onSelect={(pid) => quickSwapMember(dayIdx, sessIdx, commIdx, 'supervisor', pid)}
+                                                />
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
                         ))}
                     </Card.Body>
                 </Card>
             ))}
-
-            {/* Committee edit modal */}
-            <Modal show={editing !== null} onHide={() => setEditing(null)} centered>
-                <Modal.Header closeButton>
-                    <Modal.Title>✏️ Edit Committee</Modal.Title>
-                </Modal.Header>
-                <Modal.Body>
-                    <Form.Group className="mb-3">
-                        <Form.Label className="fw-semibold">Member 1 (Supervisor)</Form.Label>
-                        <Form.Select value={editing?.principal || ""} onChange={(e) => setEditing({ ...editing, principal: e.target.value })}>
-                            <option value="">Select...</option>
-                            {professors.map(p => <option key={p._id} value={p._id}>{p.name}</option>)}
-                        </Form.Select>
-                    </Form.Group>
-                    <Form.Group className="mb-3">
-                        <Form.Label className="fw-semibold">Member 2</Form.Label>
-                        <Form.Select value={editing?.examinator || ""} onChange={(e) => setEditing({ ...editing, examinator: e.target.value })}>
-                            <option value="">Select...</option>
-                            {professors.map(p => <option key={p._id} value={p._id}>{p.name}</option>)}
-                        </Form.Select>
-                    </Form.Group>
-                    <Form.Group className="mb-3">
-                        <Form.Label className="fw-semibold">Member 3</Form.Label>
-                        <Form.Select value={editing?.supervisor || ""} onChange={(e) => setEditing({ ...editing, supervisor: e.target.value })}>
-                            <option value="">Select...</option>
-                            {professors.map(p => <option key={p._id} value={p._id}>{p.name}</option>)}
-                        </Form.Select>
-                    </Form.Group>
-                    <div className="d-flex gap-2 justify-content-end mt-3">
-                        <Button variant="secondary" onClick={() => setEditing(null)}>Cancel</Button>
-                        <Button variant="success" onClick={saveEdit}>Save Committee</Button>
-                    </div>
-                </Modal.Body>
-            </Modal>
         </Container>
     );
 };
