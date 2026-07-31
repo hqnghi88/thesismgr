@@ -99,6 +99,27 @@ const importThesesFromExcel = async (req, res) => {
             return res.status(400).json({ message: "Could not find header row in Excel (looking for MSSV or Họ tên SV)" });
         }
 
+        // Extract course code (Mã MH) from the metadata area above the header row.
+        // Typically the label sits in a cell and the value in the cell to its right (e.g. A3="Mã MH", B3="CT553H").
+        const extractCourseCode = () => {
+            const labelPattern = /Mã MH|Mã môn học|Mã Môn Học|Mã học phần|Mã HP|Course Code|Mã môn|mon hoc/i;
+            for (let i = 0; i < Math.min(rows.length, headerRowIndex + 1); i++) {
+                const rowArr = rows[i] || [];
+                for (let j = 0; j < rowArr.length; j++) {
+                    const cell = String(rowArr[j] || "").trim();
+                    if (labelPattern.test(cell)) {
+                        const value = rowArr[j + 1] !== undefined ? String(rowArr[j + 1]).trim() : "";
+                        if (value) return value;
+                    }
+                }
+            }
+            // Fallback: read directly from cell B3 (index 2, column 1)
+            const b3 = rows[2] && rows[2][1] !== undefined ? String(rows[2][1]).trim() : "";
+            if (b3) return b3;
+            return "";
+        };
+        const fileCourseCode = extractCourseCode();
+
         // Re-read data starting from content rows
         const headers = rows[headerRowIndex];
         const dataRows = rows.slice(headerRowIndex + 1);
@@ -118,7 +139,8 @@ const importThesesFromExcel = async (req, res) => {
             let title = row['Tên đề tài'] || row['Thesis Title'] || row['Tên đề tài (Tiếng Việt và Tiếng Anh)'] || row['Tên luận văn'] || "";
             let titleEn = row['English Title'] || row['Tên đề tài tiếng Anh'] || row['Tên luận văn tiếng Anh'] || row['Thesis Title (En)'] || "";
             const supervisorName = row['GVHD'] || row['Người hướng dẫn'] || row['Supervisor'] || row['Cán bộ hướng dẫn'] || row['Cán bộ hướng dẫn khoa học'];
-            const courseCode = row['Mã MH'] || row['Mã môn học'] || row['Mã Môn Học'] || row['Mã MH (Course Code)'] || row['Course Code'] || row['Mã học phần'] || row['Mã HP'] || row['Course ID'] || "";
+            // Course code comes from a fixed metadata cell (B3), applies to all theses in this file
+            const courseCode = fileCourseCode || row['Mã MH'] || row['Mã môn học'] || row['Mã Môn Học'] || row['Course Code'] || row['Mã học phần'] || row['Mã HP'] || "";
 
             // If only one title is found but it contains both, split it
             // Patterns like "Vi (En)" or "Vi / En" or "Vi - En"
