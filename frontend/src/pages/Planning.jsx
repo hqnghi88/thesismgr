@@ -408,6 +408,12 @@ const Planning = () => {
     };
 
     const handleAutoPlan = async () => {
+        const startLabel = new Date(autoPlanParams.startDate).toLocaleDateString('vi-VN');
+        if (!(await confirm(
+            `Run auto-planning for approved theses that are not yet scheduled?\n\nFrom ${startLabel}, ${autoPlanParams.roomCount} room(s), ${autoPlanParams.slotsPerDay} slots/day. This does not modify existing schedules.`,
+            "Run Auto-Planning"
+        ))) return;
+
         setLoading(true);
         setShowAutoPlanModal(false);
         try {
