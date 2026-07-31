@@ -41,16 +41,21 @@ mongoose.connect(process.env.MONGO_URI, {
 })
     .catch((err) => console.log(`MongoDB error: ${err}`));
 
-// Drop the legacy single-field unique index on manualplans.semester if present,
-// so multiple plans per semester (one per course code) are allowed.
+// Drop any legacy manualplans index that is not the single-field unique
+// semester index, so that exactly one plan per semester is enforced. (An
+// intermediate deploy used a compound unique index on (semester, courseCode)
+// that would block the new all-course plan layout.)
 mongoose.connection.on('open', async () => {
     try {
         const col = mongoose.connection.collection('manualplans');
         const indexes = await col.indexes();
-        const legacy = indexes.find(i => i.unique && i.key && i.key.semester === 1 && Object.keys(i.key).length === 1);
-        if (legacy) {
-            await col.dropIndex(legacy.name);
-            console.log(`Dropped legacy manualplans index: ${legacy.name}`);
+        for (const idx of indexes) {
+            if (idx.name === '_id_') continue;
+            const keys = Object.keys(idx.key || {});
+            if (keys.length !== 1 || keys[0] !== 'semester' || !idx.unique) {
+                await col.dropIndex(idx.name);
+                console.log(`Dropped legacy manualplans index: ${idx.name}`);
+            }
         }
     } catch (e) {
         // Collection may not exist yet; ignore.

@@ -13,11 +13,11 @@ const populatePlan = (query) =>
 
 const getManualPlan = async (req, res) => {
     try {
-        const { semester, courseCode } = req.query;
-        if (!semester || !courseCode) {
-            return res.status(400).json({ message: "semester and courseCode query parameters are required" });
+        const { semester } = req.query;
+        if (!semester) {
+            return res.status(400).json({ message: "semester query parameter is required" });
         }
-        const plan = await populatePlan(ManualPlan.findOne({ semester, courseCode }));
+        const plan = await populatePlan(ManualPlan.findOne({ semester }));
         res.json(plan);
     } catch (error) {
         console.error("getManualPlan Error:", error);
@@ -27,16 +27,16 @@ const getManualPlan = async (req, res) => {
 
 const autoPlanManual = async (req, res) => {
     try {
-        const { semester, courseCode, startDate, capacity = 6, roomCount = 3, sessionsPerDay = 2 } = req.body;
-        if (!semester || !courseCode) {
-            return res.status(400).json({ message: "semester and courseCode are required" });
+        const { semester, startDate, capacity = 6, roomCount = 3, sessionsPerDay = 2 } = req.body;
+        if (!semester) {
+            return res.status(400).json({ message: "semester is required" });
         }
 
-        const theses = await Thesis.find({ semester, courseCode, status: { $ne: "completed" } })
+        const theses = await Thesis.find({ semester, status: { $ne: "completed" } })
             .populate('supervisor', 'name')
             .sort({ title: 1 });
         if (theses.length === 0) {
-            return res.status(400).json({ message: `No theses for course code ${courseCode} in this semester.` });
+            return res.status(400).json({ message: "No theses for this semester." });
         }
 
         const professors = await User.find({ role: { $in: ["professor", "admin"] } }).sort({ name: 1 });
@@ -48,42 +48,46 @@ const autoPlanManual = async (req, res) => {
         const numRooms = Math.min(Math.max(parseInt(roomCount) || 1, 1), DEFAULT_ROOMS.length);
         const cap = Math.max(parseInt(capacity) || 6, 1);
 
-        // Group theses by supervisor. Each supervisor heads the committee(s)
-        // for their own theses (matching the reference Excel where e.g. "Tram 5"
-        // is a committee led by supervisor Tram with 5 of Tram's theses).
-        const bySupervisor = {};
+        // Group theses by (course code, supervisor). Each supervisor heads the
+        // committee(s) for their own theses within each course (matching the
+        // reference Excel where e.g. "Tram 5" is a committee led by supervisor
+        // Tram with 5 of Tram's theses).
+        const groups = {};
         theses.forEach(t => {
+            const course = (t.courseCode || "").trim();
             const supId = t.supervisor?._id?.toString() || t.supervisor?.toString();
             if (!supId) return;
-            if (!bySupervisor[supId]) bySupervisor[supId] = { supId, supName: t.supervisor?.name || "", theses: [] };
-            bySupervisor[supId].theses.push(t);
+            const key = `${course}||${supId}`;
+            if (!groups[key]) groups[key] = { courseCode: course, supId, supName: t.supervisor?.name || "", theses: [] };
+            groups[key].theses.push(t);
         });
 
-        if (Object.keys(bySupervisor).length === 0) {
+        if (Object.keys(groups).length === 0) {
             return res.status(400).json({ message: "Theses have no supervisor assigned." });
         }
 
-        // Split each supervisor's theses into as-evenly-as-possible committees.
+        // Split each group's theses into as-evenly-as-possible committees.
         const allCommittees = [];
-        Object.values(bySupervisor)
-            .sort((a, b) => b.theses.length - a.theses.length || a.supName.localeCompare(b.supName))
-            .forEach(group => {
-                const n = group.theses.length;
-                const chunks = Math.max(1, Math.ceil(n / cap));
-                const base = Math.floor(n / chunks);
-                const remainder = n % chunks;
-                let idx = 0;
-                for (let i = 0; i < chunks; i++) {
-                    const size = base + (i < remainder ? 1 : 0);
-                    allCommittees.push({
-                        principal: group.supId,
-                        examinator: null,
-                        supervisor: null,
-                        thesisIds: group.theses.slice(idx, idx + size).map(t => t._id),
-                    });
-                    idx += size;
-                }
-            });
+        const groupOrder = Object.values(groups)
+            .sort((a, b) => b.theses.length - a.theses.length || a.supName.localeCompare(b.supName) || a.courseCode.localeCompare(b.courseCode));
+        groupOrder.forEach(group => {
+            const n = group.theses.length;
+            const chunks = Math.max(1, Math.ceil(n / cap));
+            const base = Math.floor(n / chunks);
+            const remainder = n % chunks;
+            let idx = 0;
+            for (let i = 0; i < chunks; i++) {
+                const size = base + (i < remainder ? 1 : 0);
+                allCommittees.push({
+                    courseCode: group.courseCode,
+                    principal: group.supId,
+                    examinator: null,
+                    supervisor: null,
+                    thesisIds: group.theses.slice(idx, idx + size).map(t => t._id),
+                });
+                idx += size;
+            }
+        });
 
         // Number of days is derived from how many committees we have.
         const perDay = sessions.length * numRooms;
@@ -102,56 +106,52 @@ const autoPlanManual = async (req, res) => {
             });
         }
 
-        // Assign the 2 other members of each committee, rotating through
-        // professors so a supervisor never sits on their own committee.
+        // One slot per (day, session). A professor can belong to at most one
+        // committee per slot regardless of course code, and each slot holds up
+        // to numRooms committees (one per room).
         const sessionSlots = [];
         days.forEach((day, di) => day.sessions.forEach((sess, si) => {
-            sessionSlots.push({ day: di, sess: si, count: 0, supIds: new Set() });
+            sessionSlots.push({ day: di, sess: si, count: 0, profIds: new Set() });
         }));
 
         let otherIdx = 0;
-        // Place committees round-robin so a supervisor appears at most once per session.
-        const maxChunks = Math.max(...Object.values(bySupervisor).map(g => Math.max(1, Math.ceil(g.theses.length / cap))));
-        const sortedSupIds = Object.values(bySupervisor)
-            .sort((a, b) => b.theses.length - a.theses.length || a.supName.localeCompare(b.supName))
-            .map(g => g.supId);
+        allCommittees.forEach(committee => {
+            for (const slot of sessionSlots) {
+                if (slot.count >= numRooms) continue;
+                if (slot.profIds.has(committee.principal)) continue;
 
-        for (let r = 0; r < maxChunks; r++) {
-            for (const supId of sortedSupIds) {
-                const committee = allCommittees.find(c => c.principal === supId && c._used !== true);
-                if (!committee) continue;
-                committee._used = true;
+                const others = professors.filter(p =>
+                    p._id.toString() !== committee.principal && !slot.profIds.has(p._id.toString()));
+                if (others.length < 2) continue;
 
-                let slot = sessionSlots.find(s => s.count < numRooms && !s.supIds.has(supId))
-                    || sessionSlots.find(s => s.count < numRooms);
-                if (!slot) continue;
+                const m2 = others[otherIdx % others.length];
+                const m3 = others[(otherIdx + 1) % others.length];
 
-                slot.supIds.add(supId);
+                slot.profIds.add(committee.principal);
+                slot.profIds.add(m2._id.toString());
+                slot.profIds.add(m3._id.toString());
                 slot.count++;
-
-                const others = professors.filter(p => p._id.toString() !== supId);
-                committee.examinator = others[otherIdx % others.length]._id;
-                committee.supervisor = others[(otherIdx + 1) % others.length]._id;
                 otherIdx++;
 
-                committee.room = DEFAULT_ROOMS[slot.count - 1] || DEFAULT_ROOMS[0];
                 days[slot.day].sessions[slot.sess].committees.push({
-                    room: committee.room,
+                    courseCode: committee.courseCode,
+                    room: DEFAULT_ROOMS[slot.count - 1] || DEFAULT_ROOMS[0],
                     principal: committee.principal,
-                    examinator: committee.examinator,
-                    supervisor: committee.supervisor,
+                    examinator: m2._id,
+                    supervisor: m3._id,
                     thesisIds: committee.thesisIds,
                 });
+                break;
             }
-        }
+        });
 
-        await ManualPlan.deleteOne({ semester, courseCode });
-        const plan = new ManualPlan({ semester, courseCode, days });
+        await ManualPlan.deleteOne({ semester });
+        const plan = new ManualPlan({ semester, days });
         await plan.save();
 
-        const saved = await populatePlan(ManualPlan.findOne({ semester, courseCode }));
+        const saved = await populatePlan(ManualPlan.findOne({ semester }));
         res.status(201).json({
-            message: "Manual planning completed.",
+            message: "Manual planning completed for all course codes.",
             thesisCount: theses.length,
             numDays: numD,
             plan: saved,
@@ -164,9 +164,9 @@ const autoPlanManual = async (req, res) => {
 
 const saveManualPlan = async (req, res) => {
     try {
-        const { semester, courseCode, days } = req.body;
-        if (!semester || !courseCode || !Array.isArray(days)) {
-            return res.status(400).json({ message: "semester, courseCode and days array are required" });
+        const { semester, days } = req.body;
+        if (!semester || !Array.isArray(days)) {
+            return res.status(400).json({ message: "semester and days array are required" });
         }
 
         const cleanId = (v) => (v && v._id ? v._id : v) || null;
@@ -175,6 +175,7 @@ const saveManualPlan = async (req, res) => {
             sessions: (day.sessions || []).map(sess => ({
                 session: sess.session,
                 committees: (sess.committees || []).map(c => ({
+                    courseCode: c.courseCode || "",
                     room: c.room || "",
                     principal: cleanId(c.principal),
                     examinator: cleanId(c.examinator),
@@ -184,10 +185,10 @@ const saveManualPlan = async (req, res) => {
             })),
         }));
 
-        await ManualPlan.deleteOne({ semester, courseCode });
-        const plan = new ManualPlan({ semester, courseCode, days: cleanDays });
+        await ManualPlan.deleteOne({ semester });
+        const plan = new ManualPlan({ semester, days: cleanDays });
         await plan.save();
-        const saved = await populatePlan(ManualPlan.findOne({ semester, courseCode }));
+        const saved = await populatePlan(ManualPlan.findOne({ semester }));
         res.status(200).json({ message: "Manual plan saved.", plan: saved });
     } catch (error) {
         console.error("saveManualPlan Error:", error);
@@ -197,11 +198,11 @@ const saveManualPlan = async (req, res) => {
 
 const deleteManualPlan = async (req, res) => {
     try {
-        const { semester, courseCode } = req.query;
-        if (!semester || !courseCode) {
-            return res.status(400).json({ message: "semester and courseCode query parameters are required to prevent accidental data loss" });
+        const { semester } = req.query;
+        if (!semester) {
+            return res.status(400).json({ message: "semester query parameter is required to prevent accidental data loss" });
         }
-        await ManualPlan.deleteOne({ semester, courseCode });
+        await ManualPlan.deleteOne({ semester });
         res.status(200).json({ message: "Manual plan deleted." });
     } catch (error) {
         console.error("deleteManualPlan Error:", error);
@@ -211,40 +212,64 @@ const deleteManualPlan = async (req, res) => {
 
 const exportManualPlan = async (req, res) => {
     try {
-        const { semester, courseCode } = req.query;
-        if (!semester || !courseCode) {
-            return res.status(400).json({ message: "semester and courseCode query parameters are required" });
+        const { semester } = req.query;
+        if (!semester) {
+            return res.status(400).json({ message: "semester query parameter is required" });
         }
-        const plan = await populatePlan(ManualPlan.findOne({ semester, courseCode }));
+        const plan = await populatePlan(ManualPlan.findOne({ semester }));
         if (!plan) {
             return res.status(404).json({ message: "No manual plan to export" });
         }
 
-        const aoa = [[`MA HOC PHAN: ${plan.courseCode}`]];
-        plan.days.forEach(day => {
-            const dd = new Date(day.date);
-            const dateLabel = `${dd.getUTCDate()}/${dd.getUTCMonth() + 1}`;
-            day.sessions.forEach(sess => {
+        // Group committees by course code, one sheet per course.
+        const courses = {};
+        plan.days.forEach(day => day.sessions.forEach(sess => sess.committees.forEach(c => {
+            const code = c.courseCode || "NO CODE";
+            if (!courses[code]) courses[code] = [];
+            courses[code].push({ date: day.date, session: sess.session, c });
+        })));
+
+        const courseList = Object.keys(courses).sort();
+        if (courseList.length === 0) {
+            return res.status(404).json({ message: "No manual plan to export" });
+        }
+
+        const wb = xlsx.utils.book_new();
+        courseList.forEach(code => {
+            const items = courses[code];
+            const sessionGroups = [];
+            const seen = {};
+            items.forEach(item => {
+                const key = `${new Date(item.date).toISOString()}|${item.session}`;
+                if (!seen[key]) {
+                    seen[key] = { date: item.date, session: item.session, committees: [] };
+                    sessionGroups.push(seen[key]);
+                }
+                seen[key].committees.push(item.c);
+            });
+
+            const aoa = [[`MA HOC PHAN: ${code}`]];
+            sessionGroups.forEach(g => {
+                const dd = new Date(g.date);
+                const dateLabel = `${dd.getUTCDate()}/${dd.getUTCMonth() + 1}`;
                 aoa.push([`Ngay ${dateLabel}`]);
-                const row1 = [sess.session];
+                const row1 = [g.session];
                 const row2 = [""];
                 const row3 = [""];
-                sess.committees.forEach(c => {
+                g.committees.forEach(c => {
                     const count = c.thesisIds.length;
                     row1.push(c.principal?.name || "", count, "");
                     row2.push(c.examinator?.name || "", "", "");
                     row3.push(c.supervisor?.name || "", "", "");
                 });
-                aoa.push(row1);
-                aoa.push(row2);
-                aoa.push(row3);
+                aoa.push(row1, row2, row3);
             });
+
+            const ws = xlsx.utils.aoa_to_sheet(aoa);
+            ws["!cols"] = [{ wch: 12 }, { wch: 24 }, { wch: 6 }, { wch: 24 }, { wch: 6 }, { wch: 24 }, { wch: 6 }];
+            xlsx.utils.book_append_sheet(wb, ws, `Lich LVTN ${code}`);
         });
 
-        const wb = xlsx.utils.book_new();
-        const ws = xlsx.utils.aoa_to_sheet(aoa);
-        ws["!cols"] = [{ wch: 12 }, { wch: 24 }, { wch: 6 }, { wch: 24 }, { wch: 6 }, { wch: 24 }, { wch: 6 }];
-        xlsx.utils.book_append_sheet(wb, ws, `Lich LVTN ${plan.courseCode}`);
         const buf = xlsx.write(wb, { type: "buffer", bookType: "xlsx" });
         res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         res.send(buf);

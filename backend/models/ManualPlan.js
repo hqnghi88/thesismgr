@@ -2,6 +2,11 @@ const mongoose = require("mongoose");
 
 const committeeSchema = new mongoose.Schema(
     {
+        courseCode: {
+            type: String,
+            trim: true,
+            default: "",
+        },
         room: {
             type: String,
             default: "",
@@ -57,17 +62,11 @@ const manualPlanSchema = new mongoose.Schema(
             type: mongoose.Schema.Types.ObjectId,
             ref: "Semester",
             required: true,
-        },
-        courseCode: {
-            type: String,
-            trim: true,
-            required: true,
+            unique: true,
         },
         days: [daySchema],
     },
     { timestamps: true }
 );
-
-manualPlanSchema.index({ semester: 1, courseCode: 1 }, { unique: true });
 
 module.exports = mongoose.model("ManualPlan", manualPlanSchema);
