@@ -2,19 +2,24 @@ import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { Container, Row, Col, Card, Form, Button, Badge, Alert } from "react-bootstrap";
 import { useNotification } from "../context/NotificationContext";
+import { useSemester } from "../context/SemesterContext";
 
 const Theses = () => {
     const { notify, confirm } = useNotification();
+    const { activeSemester } = useSemester();
     const [theses, setTheses] = useState([]);
-    const [form, setForm] = useState({ title: "", titleEn: "", abstract: "", supervisor: "" });
+    const [form, setForm] = useState({ title: "", titleEn: "", abstract: "", supervisor: "", semester: "" });
     const [editingId, setEditingId] = useState(null);
     const [professors, setProfessors] = useState([]);
     const token = localStorage.getItem("token");
 
     const fetchTheses = async () => {
         try {
+            const params = {};
+            if (activeSemester?._id) params.semester = activeSemester._id;
             const res = await axios.get(`${import.meta.env.VITE_API_URL}/api/theses`, {
                 headers: { Authorization: `Bearer ${token}` },
+                params,
             });
             setTheses(res.data);
         } catch (err) {
@@ -36,18 +41,20 @@ const Theses = () => {
     useEffect(() => {
         fetchTheses();
         fetchProfessors();
-    }, []);
+    }, [activeSemester]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
+            const payload = { ...form };
+            if (activeSemester?._id) payload.semester = activeSemester._id;
             if (editingId) {
-                await axios.put(`${import.meta.env.VITE_API_URL}/api/theses/${editingId}`, form, {
+                await axios.put(`${import.meta.env.VITE_API_URL}/api/theses/${editingId}`, payload, {
                     headers: { Authorization: `Bearer ${token}` },
                 });
                 setEditingId(null);
             } else {
-                await axios.post(`${import.meta.env.VITE_API_URL}/api/theses`, form, {
+                await axios.post(`${import.meta.env.VITE_API_URL}/api/theses`, payload, {
                     headers: { Authorization: `Bearer ${token}` },
                 });
             }

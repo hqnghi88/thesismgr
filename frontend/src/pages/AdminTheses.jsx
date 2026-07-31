@@ -2,9 +2,11 @@ import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { Container, Row, Col, Card, Button, Form, Badge, Alert } from "react-bootstrap";
 import { useNotification } from "../context/NotificationContext";
+import { useSemester } from "../context/SemesterContext";
 
 const AdminTheses = () => {
     const { notify, confirm } = useNotification();
+    const { activeSemester } = useSemester();
     const [theses, setTheses] = useState([]);
     const [professors, setProfessors] = useState([]);
     const [importing, setImporting] = useState(false);
@@ -12,8 +14,10 @@ const AdminTheses = () => {
 
     const fetchData = async () => {
         try {
+            const params = {};
+            if (activeSemester?._id) params.semester = activeSemester._id;
             const [thesisRes, profRes] = await Promise.all([
-                axios.get(`${import.meta.env.VITE_API_URL}/api/admin/theses`, { headers: { Authorization: `Bearer ${token}` } }),
+                axios.get(`${import.meta.env.VITE_API_URL}/api/admin/theses`, { headers: { Authorization: `Bearer ${token}` }, params }),
                 axios.get(`${import.meta.env.VITE_API_URL}/api/professors`, { headers: { Authorization: `Bearer ${token}` } })
             ]);
             setTheses(thesisRes.data);
@@ -26,9 +30,14 @@ const AdminTheses = () => {
     const handleImport = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
+        if (!activeSemester?._id) {
+            notify("Please select a semester first");
+            return;
+        }
 
         const formData = new FormData();
         formData.append('file', file);
+        formData.append('semester', activeSemester._id);
 
         setImporting(true);
         try {
@@ -72,10 +81,13 @@ const AdminTheses = () => {
     };
 
     const handleDeleteAll = async () => {
-        if (!(await confirm("Are you sure you want to delete ALL theses? This action cannot be undone."))) return;
+        if (!(await confirm("Are you sure you want to delete ALL theses for this semester? This action cannot be undone."))) return;
         try {
+            const params = {};
+            if (activeSemester?._id) params.semester = activeSemester._id;
             const res = await axios.delete(`${import.meta.env.VITE_API_URL}/api/admin/theses/all`, {
-                headers: { Authorization: `Bearer ${token}` }
+                headers: { Authorization: `Bearer ${token}` },
+                params
             });
             notify(res.data.message);
             fetchData();
@@ -97,13 +109,16 @@ const AdminTheses = () => {
 
     useEffect(() => {
         fetchData();
-    }, []);
+    }, [activeSemester]);
 
     return (
         <Container fluid className="py-4" style={{ marginTop: '70px', backgroundColor: '#f8f9fa', minHeight: '100vh' }}>
             <Container>
                 <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4 gap-3">
-                    <h2 className="mb-0 fw-bold">🎓 All Theses (Admin Console)</h2>
+                    <div>
+                        <h2 className="mb-0 fw-bold">All Theses (Admin Console)</h2>
+                        {activeSemester && <p className="text-muted mb-0 mt-1">{activeSemester.displayName}</p>}
+                    </div>
                     <div className="d-flex gap-2 flex-wrap">
                         <Button variant="outline-danger" onClick={handleDeleteAll}>
                             🗑️ Delete All Theses

@@ -2,8 +2,10 @@ import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { Container, Row, Col, Card, Button, Badge, ListGroup } from "react-bootstrap";
+import { useSemester } from "../context/SemesterContext";
 
 const Dashboard = () => {
+    const { activeSemester } = useSemester();
     const [stats, setStats] = useState({
         totalTheses: 0,
         pendingTheses: 0,
@@ -20,17 +22,22 @@ const Dashboard = () => {
 
     useEffect(() => {
         fetchDashboardData();
-    }, []);
+    }, [activeSemester]);
 
     const fetchDashboardData = async () => {
         try {
+            const params = {};
+            if (activeSemester?._id) params.semester = activeSemester._id;
+
             const thesesRes = await axios.get(`${import.meta.env.VITE_API_URL}/api/theses`, {
-                headers: { Authorization: `Bearer ${token}` }
+                headers: { Authorization: `Bearer ${token}` },
+                params
             });
             const theses = thesesRes.data;
 
             const schedulesRes = await axios.get(`${import.meta.env.VITE_API_URL}/api/schedules`, {
-                headers: { Authorization: `Bearer ${token}` }
+                headers: { Authorization: `Bearer ${token}` },
+                params
             });
             const schedules = schedulesRes.data;
 
@@ -74,8 +81,9 @@ const Dashboard = () => {
     return (
         <Container fluid className="py-4" style={{ marginTop: '70px', backgroundColor: '#f8f9fa', minHeight: '100vh' }}>
             <Container>
-                <h2 className="mb-1 fw-bold">📊 Dashboard</h2>
-                <p className="text-muted mb-4">Welcome back, <strong>{user.name}</strong>! Here's an overview of your thesis management system.</p>
+                <h2 className="mb-1 fw-bold">Dashboard</h2>
+                <p className="text-muted mb-1">Welcome back, <strong>{user.name}</strong>!</p>
+                {activeSemester && <p className="text-muted mb-4"><strong>{activeSemester.displayName}</strong></p>}
 
                 {/* Statistics Cards */}
                 <Row className="g-4 mb-4">

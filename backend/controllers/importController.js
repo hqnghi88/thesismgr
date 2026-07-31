@@ -73,6 +73,11 @@ const importThesesFromExcel = async (req, res) => {
             return res.status(400).json({ message: "No file uploaded" });
         }
 
+        const semester = req.body.semester;
+        if (!semester) {
+            return res.status(400).json({ message: "Semester is required" });
+        }
+
         const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
@@ -194,7 +199,7 @@ const importThesesFromExcel = async (req, res) => {
             }
 
             // 3. Create or Update Thesis
-            const existingThesis = await Thesis.findOne({ student: student._id });
+            const existingThesis = await Thesis.findOne({ student: student._id, semester });
             
             if (existingThesis) {
                 // Update title, titleEn, and supervisor but preserve status if it's already progressed beyond 'approved'
@@ -216,6 +221,7 @@ const importThesesFromExcel = async (req, res) => {
                 const newThesis = new Thesis({
                     student: student._id,
                     supervisor: professor._id,
+                    semester,
                     title: String(title).trim(),
                     titleEn: String(titleEn).trim(),
                     status: "approved"

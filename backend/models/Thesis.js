@@ -12,6 +12,11 @@ const thesisSchema = new mongoose.Schema(
             ref: "User",
             required: true,
         },
+        semester: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Semester",
+            required: true,
+        },
         title: {
             type: String,
             required: true,

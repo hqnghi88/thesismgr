@@ -2,9 +2,11 @@ import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { Container, Row, Col, Card, Button, Modal, Form, Badge, ListGroup, Alert, ButtonGroup, Table, Dropdown } from "react-bootstrap";
 import { useNotification } from "../context/NotificationContext";
+import { useSemester } from "../context/SemesterContext";
 
 const Planning = () => {
     const { notify, confirm } = useNotification();
+    const { activeSemester } = useSemester();
     const [schedules, setSchedules] = useState([]);
     const [loading, setLoading] = useState(false);
     const [editingSchedule, setEditingSchedule] = useState(null);
@@ -38,8 +40,11 @@ const Planning = () => {
 
     const fetchSchedules = async () => {
         try {
+            const params = {};
+            if (activeSemester?._id) params.semester = activeSemester._id;
             const res = await axios.get(`${import.meta.env.VITE_API_URL}/api/schedules`, {
                 headers: { Authorization: `Bearer ${token}` },
+                params,
             });
             setSchedules(res.data);
             // Auto-clear conflicts on refresh so stale highlights don't linger
@@ -53,8 +58,11 @@ const Planning = () => {
     const handleCheckConflicts = async () => {
         setCheckingConflicts(true);
         try {
+            const params = {};
+            if (activeSemester?._id) params.semester = activeSemester._id;
             const res = await axios.get(`${import.meta.env.VITE_API_URL}/api/schedule/check-conflicts`, {
                 headers: { Authorization: `Bearer ${token}` },
+                params,
             });
             setConflictIds(new Set(res.data.conflictedScheduleIds));
             setConflictDetails(res.data.details);
@@ -320,10 +328,13 @@ const Planning = () => {
     };
 
     const handleDeleteAllSchedules = async () => {
-        if (!(await confirm("Are you sure you want to delete ALL schedules? This will reset all thesis statuses back to 'approved'."))) return;
+        if (!(await confirm("Are you sure you want to delete ALL schedules for this semester? This will reset all thesis statuses back to 'approved'."))) return;
         try {
+            const params = {};
+            if (activeSemester?._id) params.semester = activeSemester._id;
             const res = await axios.delete(`${import.meta.env.VITE_API_URL}/api/schedule/all`, {
                 headers: { Authorization: `Bearer ${token}` },
+                params,
             });
             notify(res.data.message);
             fetchSchedules();
@@ -336,7 +347,9 @@ const Planning = () => {
         setLoading(true);
         setShowAutoPlanModal(false);
         try {
-            const res = await axios.post(`${import.meta.env.VITE_API_URL}/api/schedule/auto-plan`, autoPlanParams, {
+            const payload = { ...autoPlanParams };
+            if (activeSemester?._id) payload.semester = activeSemester._id;
+            const res = await axios.post(`${import.meta.env.VITE_API_URL}/api/schedule/auto-plan`, payload, {
                 headers: { Authorization: `Bearer ${token}` },
             });
             notify(`${res.data.message}\n- Scheduled: ${res.data.scheduled}`);
@@ -350,8 +363,11 @@ const Planning = () => {
 
     const handleExport = async () => {
         try {
+            const params = {};
+            if (activeSemester?._id) params.semester = activeSemester._id;
             const res = await axios.get(`${import.meta.env.VITE_API_URL}/api/schedule/export`, {
                 headers: { Authorization: `Bearer ${token}` },
+                params,
                 responseType: 'blob'
             });
             const blob = new Blob([res.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
@@ -369,8 +385,11 @@ const Planning = () => {
 
     const handleExportDocx = async () => {
         try {
+            const params = {};
+            if (activeSemester?._id) params.semester = activeSemester._id;
             const res = await axios.get(`${import.meta.env.VITE_API_URL}/api/schedule/export-docx`, {
                 headers: { Authorization: `Bearer ${token}` },
+                params,
                 responseType: 'blob'
             });
             const blob = new Blob([res.data], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
@@ -389,7 +408,7 @@ const Planning = () => {
     useEffect(() => {
         fetchSchedules();
         fetchProfessors();
-    }, []);
+    }, [activeSemester]);
 
     const generateTimetable = () => {
         const morningSlots = ["07:15", "07:50", "08:25", "09:00", "09:35", "10:10", "10:45"];
@@ -458,7 +477,10 @@ const Planning = () => {
         <Container fluid className="py-4" style={{ marginTop: '70px', backgroundColor: '#f8f9fa', minHeight: '100vh' }}>
             <Container fluid>
                 <div className="d-flex justify-content-between align-items-center mb-4">
-                    <h2 className="fw-bold m-0">📅 Jury Planning</h2>
+                    <div>
+                        <h2 className="fw-bold m-0">Jury Planning</h2>
+                        {activeSemester && <p className="text-muted mb-0 mt-1">{activeSemester.displayName}</p>}
+                    </div>
                     <ButtonGroup size="sm">
                         <Button variant={viewMode === 'timetable' ? 'primary' : 'outline-primary'} onClick={() => setViewMode('timetable')}>📊 Timetable</Button>
                         <Button variant={viewMode === 'cards' ? 'primary' : 'outline-primary'} onClick={() => setViewMode('cards')}>📋 List View</Button>

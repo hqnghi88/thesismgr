@@ -47,11 +47,16 @@ const getConflicts = async (startTime, room, principalId, examinatorId, supervis
 
 const autoPlan = async (req, res) => {
     try {
-        const scheduledThesisIds = await Schedule.find().distinct('thesis');
-        const thesesToSchedule = await Thesis.find({
-            _id: { $nin: scheduledThesisIds },
+        const { semester } = req.body;
+        let thesisQuery = {
             status: 'approved'
-        }).populate('supervisor student');
+        };
+        if (semester) {
+            thesisQuery.semester = semester;
+        }
+        const scheduledThesisIds = await Schedule.find().distinct('thesis');
+        thesisQuery._id = { $nin: scheduledThesisIds };
+        const thesesToSchedule = await Thesis.find(thesisQuery).populate('supervisor student');
 
         if (thesesToSchedule.length === 0) {
             return res.status(200).json({ message: "No theses to schedule.", scheduled: 0 });
@@ -195,7 +200,12 @@ const autoPlan = async (req, res) => {
 
 const getSchedules = async (req, res) => {
     try {
-        const schedules = await Schedule.find()
+        let query = {};
+        if (req.query.semester) {
+            const thesesInSemester = await Thesis.find({ semester: req.query.semester }).select('_id');
+            query.thesis = { $in: thesesInSemester.map(t => t._id) };
+        }
+        const schedules = await Schedule.find(query)
             .populate({ path: 'thesis', populate: { path: 'student supervisor', select: 'name' } })
             .populate('principal examinator supervisor student', 'name');
         res.status(200).json(schedules);
@@ -267,21 +277,29 @@ const deleteSchedule = async (req, res) => {
 
 const deleteAllSchedules = async (req, res) => {
     try {
-        console.log("Admin clearing all schedules...");
+        console.log("Admin clearing schedules...");
 
-        // 1. Delete all schedule records
-        const deleteResult = await Schedule.deleteMany({});
+        let scheduleQuery = {};
+        let thesisQuery = { status: 'scheduled' };
+
+        if (req.query.semester) {
+            const thesesInSemester = await Thesis.find({ semester: req.query.semester }).select('_id');
+            const thesisIds = thesesInSemester.map(t => t._id);
+            scheduleQuery.thesis = { $in: thesisIds };
+            thesisQuery._id = { $in: thesisIds };
+        }
+
+        const deleteResult = await Schedule.deleteMany(scheduleQuery);
         console.log(`Deleted ${deleteResult.deletedCount || 0} schedules.`);
 
-        // 2. Reset all 'scheduled' theses to 'approved'
         const updateResult = await Thesis.updateMany(
-            { status: 'scheduled' },
+            thesisQuery,
             { $set: { status: 'approved' } }
         );
         console.log(`Reset ${updateResult.modifiedCount || 0} theses from 'scheduled' to 'approved'.`);
 
         res.status(200).json({
-            message: "Successfully cleared all schedules.",
+            message: "Successfully cleared schedules.",
             details: {
                 deletedCount: deleteResult.deletedCount || 0,
                 updatedCount: updateResult.modifiedCount || 0
@@ -298,7 +316,12 @@ const deleteAllSchedules = async (req, res) => {
 
 const exportSchedules = async (req, res) => {
     try {
-        const schedules = await Schedule.find().populate('thesis principal examinator supervisor student');
+        let query = {};
+        if (req.query.semester) {
+            const thesesInSemester = await Thesis.find({ semester: req.query.semester }).select('_id');
+            query.thesis = { $in: thesesInSemester.map(t => t._id) };
+        }
+        const schedules = await Schedule.find(query).populate('thesis principal examinator supervisor student');
         const rows = [["STT", "MSSV", "Họ tên SV", "Tên đề tài", "GVHD", "Giờ", "Hội đồng"]];
         schedules.forEach((s, i) => {
             const fullTitle = s.thesis?.titleEn ? `${s.thesis.title} (${s.thesis.titleEn})` : (s.thesis?.title || "-");
@@ -318,7 +341,12 @@ const exportSchedules = async (req, res) => {
 const exportDocx = async (req, res) => {
     try {
         const { AlignmentType, WidthType, BorderStyle, VerticalAlign, PageOrientation } = require("docx");
-        const schedules = await Schedule.find()
+        let query = {};
+        if (req.query.semester) {
+            const thesesInSemester = await Thesis.find({ semester: req.query.semester }).select('_id');
+            query.thesis = { $in: thesesInSemester.map(t => t._id) };
+        }
+        const schedules = await Schedule.find(query)
             .populate('thesis principal examinator supervisor student')
             .sort({ startTime: 1, room: 1 });
 
@@ -463,7 +491,12 @@ const exportDocx = async (req, res) => {
 
 const checkAllConflicts = async (req, res) => {
     try {
-        const schedules = await Schedule.find()
+        let query = {};
+        if (req.query.semester) {
+            const thesesInSemester = await Thesis.find({ semester: req.query.semester }).select('_id');
+            query.thesis = { $in: thesesInSemester.map(t => t._id) };
+        }
+        const schedules = await Schedule.find(query)
             .populate('principal examinator supervisor', 'name _id');
 
         const timeSlotMap = {};

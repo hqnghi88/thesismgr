@@ -2,10 +2,11 @@ const Thesis = require("../models/Thesis");
 
 const createThesis = async (req, res) => {
     try {
-        const { title, titleEn, abstract, supervisor, documentUrl } = req.body;
+        const { title, titleEn, abstract, supervisor, documentUrl, semester } = req.body;
         const newThesis = new Thesis({
             student: req.user.id,
             supervisor,
+            semester,
             title,
             titleEn,
             abstract,
@@ -27,6 +28,9 @@ const getTheses = async (req, res) => {
         } else if (req.user.role === 'professor') {
             query.supervisor = req.user.id;
         }
+        if (req.query.semester) {
+            query.semester = req.query.semester;
+        }
         const theses = await Thesis.find(query).populate('student supervisor', 'name email');
         res.status(200).json(theses);
     } catch (error) {
@@ -40,7 +44,6 @@ const updateThesis = async (req, res) => {
         const thesis = await Thesis.findById(req.params.id);
         if (!thesis) return res.status(404).json({ message: "Thesis not found" });
 
-        // Only student (owner) or supervisor or admin can update
         if (thesis.student.toString() !== req.user.id &&
             thesis.supervisor.toString() !== req.user.id &&
             req.user.role !== 'admin') {
@@ -74,7 +77,11 @@ const deleteThesis = async (req, res) => {
 
 const getAllThesesAdmin = async (req, res) => {
     try {
-        const theses = await Thesis.find().populate('student supervisor', 'name email');
+        let query = {};
+        if (req.query.semester) {
+            query.semester = req.query.semester;
+        }
+        const theses = await Thesis.find(query).populate('student supervisor', 'name email');
         res.status(200).json(theses);
     } catch (error) {
         console.error("Admin Get Theses Error:", error.message);
@@ -97,8 +104,16 @@ const Schedule = require("../models/Schedule");
 
 const deleteAllTheses = async (req, res) => {
     try {
-        await Schedule.deleteMany({}); // Crucial: clear schedules first
-        const result = await Thesis.deleteMany({});
+        let thesisQuery = {};
+        let scheduleQuery = {};
+        if (req.query.semester) {
+            thesisQuery.semester = req.query.semester;
+            const theses = await Thesis.find(thesisQuery).select('_id');
+            const thesisIds = theses.map(t => t._id);
+            scheduleQuery.thesis = { $in: thesisIds };
+        }
+        await Schedule.deleteMany(scheduleQuery);
+        const result = await Thesis.deleteMany(thesisQuery);
         res.status(200).json({ message: `Successfully deleted all schedules and ${result.deletedCount} theses` });
     } catch (error) {
         console.error("Admin Delete All Theses Error:", error.message);
@@ -107,4 +122,3 @@ const deleteAllTheses = async (req, res) => {
 };
 
 module.exports = { createThesis, getTheses, updateThesis, deleteThesis, getAllThesesAdmin, updateThesisAdmin, deleteAllTheses };
-
