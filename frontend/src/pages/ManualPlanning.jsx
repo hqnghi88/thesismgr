@@ -4,6 +4,8 @@ import { Container, Row, Col, Card, Button, Form, Alert, Badge, Dropdown } from 
 import { useNotification } from "../context/NotificationContext";
 import { useSemester } from "../context/SemesterContext";
 
+const DEFAULT_ROOMS = ["Room 110/DI", "Room 111/DI", "Room 112/DI", "Room 113/DI"];
+
 const ProfessorDropdown = ({ profs, value, label, bg, color, onSelect }) => {
     const [open, setOpen] = useState(false);
     const [search, setSearch] = useState("");
@@ -26,8 +28,12 @@ const ProfessorDropdown = ({ profs, value, label, bg, color, onSelect }) => {
     );
 };
 
-const CommitteeCard = ({ c, dayIdx, sessIdx, commIdx, professors, onSwap }) => (
-    <div className="border rounded shadow-sm bg-white overflow-hidden" style={{ width: '280px' }}>
+const CommitteeCard = ({ c, dayIdx, sessIdx, commIdx, professors, onSwap, onCardClick, isMoving }) => (
+    <div
+        className={`border rounded shadow-sm bg-white overflow-hidden ${isMoving ? 'border-danger animate-pulse' : ''}`}
+        style={{ width: '280px', cursor: 'pointer' }}
+        onClick={() => onCardClick(dayIdx, sessIdx, commIdx)}
+    >
         <div className="d-flex justify-content-between align-items-center px-2 py-1 border-bottom bg-light">
             <span className="small fw-bold text-muted">{c.room || `Committee ${commIdx + 1}`}</span>
             <span className="d-inline-flex align-items-center gap-1">
@@ -39,7 +45,7 @@ const CommitteeCard = ({ c, dayIdx, sessIdx, commIdx, professors, onSwap }) => (
             <span style={{ fontSize: '0.7rem', color: '#16a34a', fontWeight: 700, minWidth: '24px' }}>SV</span>
             <span className="fw-bold text-success text-truncate" title={c.principal?.name} style={{ fontSize: '0.9rem' }}>{c.principal?.name || '—'}</span>
         </div>
-        <div className="border-bottom">
+        <div className="border-bottom" onClick={(e) => e.stopPropagation()}>
             <ProfessorDropdown
                 label="M2"
                 bg="#eff6ff"
@@ -49,7 +55,7 @@ const CommitteeCard = ({ c, dayIdx, sessIdx, commIdx, professors, onSwap }) => (
                 onSelect={(pid) => onSwap(dayIdx, sessIdx, commIdx, 'examinator', pid)}
             />
         </div>
-        <div>
+        <div onClick={(e) => e.stopPropagation()}>
             <ProfessorDropdown
                 label="M3"
                 bg="#faf5ff"
@@ -59,6 +65,9 @@ const CommitteeCard = ({ c, dayIdx, sessIdx, commIdx, professors, onSwap }) => (
                 onSelect={(pid) => onSwap(dayIdx, sessIdx, commIdx, 'supervisor', pid)}
             />
         </div>
+        {isMoving && (
+            <div className="text-center bg-danger text-white small fw-bold py-1">PICKED UP</div>
+        )}
     </div>
 );
 
@@ -70,6 +79,7 @@ const ManualPlanning = () => {
     const [plan, setPlan] = useState(null);
     const [loading, setLoading] = useState(false);
     const [professors, setProfessors] = useState([]);
+    const [movingRef, setMovingRef] = useState(null);
     const [controls, setControls] = useState({
         startDate: new Date().toISOString().slice(0, 10),
         capacity: 6,
@@ -107,8 +117,24 @@ const ManualPlanning = () => {
 
     useEffect(() => {
         setPlan(null);
+        setMovingRef(null);
         fetchPlan();
     }, [activeSemester]);
+
+    const savePlan = async (days) => {
+        try {
+            await axios.put(`${import.meta.env.VITE_API_URL}/api/manual-plan`, {
+                semester: activeSemester._id,
+                days,
+            }, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            fetchPlan();
+        } catch (err) {
+            notify(err.response?.data?.message || "Error updating plan");
+            fetchPlan();
+        }
+    };
 
     const handleAutoPlan = async () => {
         if (!activeSemester?._id) return;
@@ -129,6 +155,7 @@ const ManualPlanning = () => {
                 headers: { Authorization: `Bearer ${token}` },
             });
             setPlan(res.data.plan);
+            setMovingRef(null);
             notify(res.data.message + ` (${res.data.thesisCount} theses)`);
         } catch (err) {
             notify(err.response?.data?.message || "Error during manual planning");
@@ -139,31 +166,58 @@ const ManualPlanning = () => {
 
     const quickSwapMember = async (dayIdx, sessIdx, commIdx, role, newProfId) => {
         if (!plan || !activeSemester?._id) return;
-        const newPlan = {
-            ...plan,
-            days: plan.days.map((d, di) => ({
-                ...d,
-                sessions: d.sessions.map((s, si) => ({
-                    ...s,
-                    committees: s.committees.map((c, ci) => (di === dayIdx && si === sessIdx && ci === commIdx
-                        ? { ...c, [role]: professors.find(p => p._id === newProfId) || c[role] }
-                        : c)),
-                })),
+        const days = plan.days.map((d, di) => ({
+            ...d,
+            sessions: d.sessions.map((s, si) => ({
+                ...s,
+                committees: s.committees.map((c, ci) => (di === dayIdx && si === sessIdx && ci === commIdx
+                    ? { ...c, [role]: professors.find(p => p._id === newProfId) || c[role] }
+                    : c)),
             })),
-        };
-        setPlan(newPlan);
-        try {
-            await axios.put(`${import.meta.env.VITE_API_URL}/api/manual-plan`, {
-                semester: activeSemester._id,
-                days: newPlan.days,
-            }, {
-                headers: { Authorization: `Bearer ${token}` },
-            });
-            fetchPlan();
-        } catch (err) {
-            notify(err.response?.data?.message || "Error updating committee");
-            fetchPlan();
+        }));
+        setPlan({ ...plan, days });
+        savePlan(days);
+    };
+
+    // Click-to-move/swap, mirroring the timetable: click a committee to pick it
+    // up, click another committee to swap their slots, or click an empty slot to
+    // move it there.
+    const handleSlotClick = (dayIdx, sessIdx, commIdx) => {
+        if (!plan || !activeSemester?._id) return;
+        if (!movingRef) {
+            if (commIdx !== null) setMovingRef({ dayIdx, sessIdx, commIdx });
+            return;
         }
+        if (movingRef.dayIdx === dayIdx && movingRef.sessIdx === sessIdx && movingRef.commIdx === commIdx) {
+            setMovingRef(null);
+            return;
+        }
+
+        const days = plan.days.map(d => ({
+            ...d,
+            sessions: d.sessions.map(s => ({ ...s, committees: s.committees.map(c => ({ ...c })) })),
+        }));
+        const srcSess = days[movingRef.dayIdx].sessions[movingRef.sessIdx];
+        const srcComm = srcSess.committees[movingRef.commIdx];
+
+        if (commIdx !== null) {
+            const dstSess = days[dayIdx].sessions[sessIdx];
+            const dstComm = dstSess.committees[commIdx];
+            const srcRoom = srcComm.room;
+            srcComm.room = dstComm.room;
+            dstComm.room = srcRoom;
+            dstSess.committees[commIdx] = srcComm;
+            srcSess.committees[movingRef.commIdx] = dstComm;
+        } else {
+            const dstSess = days[dayIdx].sessions[sessIdx];
+            srcSess.committees.splice(movingRef.commIdx, 1);
+            srcComm.room = DEFAULT_ROOMS[dstSess.committees.length] || `Room ${dstSess.committees.length + 1}`;
+            dstSess.committees.push(srcComm);
+        }
+
+        setPlan({ ...plan, days });
+        setMovingRef(null);
+        savePlan(days);
     };
 
     const handleClear = async () => {
@@ -178,6 +232,7 @@ const ManualPlanning = () => {
                 headers: { Authorization: `Bearer ${token}` },
             });
             setPlan(null);
+            setMovingRef(null);
             notify("Manual plan deleted");
         } catch (err) {
             notify(err.response?.data?.message || "Error deleting manual plan");
@@ -226,6 +281,7 @@ const ManualPlanning = () => {
         })));
     }
     const courseCodes = Object.keys(courseSections).sort();
+    const maxPerSession = plan ? plan.days.reduce((mx, d) => d.sessions.reduce((m, s) => Math.max(m, s.committees.length), mx), 1) : 1;
 
     return (
         <Container fluid className="py-4">
@@ -288,12 +344,21 @@ const ManualPlanning = () => {
                         </Col>
                     </Row>
                     {plan && (
-                        <div className="d-flex gap-2 flex-wrap">
+                        <div className="d-flex gap-2 flex-wrap align-items-center">
                             <Badge bg="secondary">{courseCodes.length} course(s)</Badge>
                             <Badge bg="secondary">{totalTheses} theses planned</Badge>
                             <Button variant="outline-primary" size="sm" onClick={handleExport}>📥 Export Excel</Button>
                             <Button variant="outline-danger" size="sm" onClick={handleClear}>🗑 Delete Plan</Button>
+                            {movingRef && (
+                                <Button variant="outline-warning" size="sm" onClick={() => setMovingRef(null)}>✖ Cancel Move</Button>
+                            )}
                         </div>
+                    )}
+                    {plan && (
+                        <p className="text-muted small mt-3 mb-0">
+                            💡 Click a committee to pick it up, then click <b>another committee to swap</b> slots or an
+                            <b> empty slot to move</b> it there.
+                        </p>
                     )}
                 </Card.Body>
             </Card>
@@ -318,7 +383,7 @@ const ManualPlanning = () => {
                     const key = `${dateLabel(item.day.date)}|${item.sess.session}`;
                     const found = slots.find(s => s.key === key);
                     if (found) found.items.push(item);
-                    else slots.push({ key, label: `${dateLabel(item.day.date)}`, session: item.sess.session, items: [item] });
+                    else slots.push({ key, label: dateLabel(item.day.date), session: item.sess.session, dayIdx: item.dayIdx, sessIdx: item.sessIdx, items: [item] });
                 });
                 return (
                     <Card key={code} className="border-0 shadow-sm mb-4">
@@ -335,14 +400,26 @@ const ManualPlanning = () => {
                                     <div className="d-flex flex-wrap gap-3">
                                         {slot.items.map(item => (
                                             <CommitteeCard
-                                                key={item.commIdx}
+                                                key={item.c._id || item.commIdx}
                                                 c={item.c}
                                                 dayIdx={item.dayIdx}
                                                 sessIdx={item.sessIdx}
                                                 commIdx={item.commIdx}
                                                 professors={professors}
                                                 onSwap={quickSwapMember}
+                                                onCardClick={handleSlotClick}
+                                                isMoving={movingRef && movingRef.dayIdx === item.dayIdx && movingRef.sessIdx === item.sessIdx && movingRef.commIdx === item.commIdx}
                                             />
+                                        ))}
+                                        {Array.from({ length: Math.max(0, maxPerSession - slot.items.length) }).map((_, i) => (
+                                            <div
+                                                key={`empty-${i}`}
+                                                className={`border rounded d-flex align-items-center justify-content-center ${movingRef ? 'border-success text-success' : 'border-secondary text-muted'}`}
+                                                style={{ width: '280px', minHeight: '168px', cursor: 'pointer', borderStyle: 'dashed', background: movingRef ? '#f0fdf4' : '#f8f9fa' }}
+                                                onClick={() => handleSlotClick(slot.dayIdx, slot.sessIdx, null)}
+                                            >
+                                                {movingRef ? <span className="fw-bold small">CLICK TO MOVE HERE</span> : <span className="small">empty slot</span>}
+                                            </div>
                                         ))}
                                     </div>
                                 </div>
