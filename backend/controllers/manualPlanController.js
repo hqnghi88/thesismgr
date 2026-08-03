@@ -9,7 +9,8 @@ const populatePlan = (query) =>
     query
         .populate('days.sessions.committees.principal', 'name')
         .populate('days.sessions.committees.examinator', 'name')
-        .populate('days.sessions.committees.supervisor', 'name');
+        .populate('days.sessions.committees.supervisor', 'name')
+        .populate('unassignedThesisIds', 'title');
 
 const getManualPlan = async (req, res) => {
     try {
@@ -164,7 +165,7 @@ const autoPlanManual = async (req, res) => {
 
 const saveManualPlan = async (req, res) => {
     try {
-        const { semester, days } = req.body;
+        const { semester, days, unassignedThesisIds } = req.body;
         if (!semester || !Array.isArray(days)) {
             return res.status(400).json({ message: "semester and days array are required" });
         }
@@ -186,7 +187,13 @@ const saveManualPlan = async (req, res) => {
         }));
 
         await ManualPlan.deleteOne({ semester });
-        const plan = new ManualPlan({ semester, days: cleanDays });
+        const plan = new ManualPlan({
+            semester,
+            days: cleanDays,
+            unassignedThesisIds: Array.isArray(unassignedThesisIds)
+                ? unassignedThesisIds.map(t => cleanId(t))
+                : [],
+        });
         await plan.save();
         const saved = await populatePlan(ManualPlan.findOne({ semester }));
         res.status(200).json({ message: "Manual plan saved.", plan: saved });

@@ -2,6 +2,7 @@ const User = require("../models/User");
 const Semester = require("../models/Semester");
 const Thesis = require("../models/Thesis");
 const Schedule = require("../models/Schedule");
+const ManualPlan = require("../models/ManualPlan");
 
 const exportBackup = async (req, res) => {
     try {
@@ -82,38 +83,39 @@ const restoreBackup = async (req, res) => {
 
         const { users, semesters, theses, schedules } = backup.data;
 
+        // Restore replaces the whole dataset, so clear existing collections first.
+        // Upserting by _id is unsafe here: a backup document whose email already
+        // exists on a different _id violates the unique email index (E11000).
+        // Wiping + inserting with the original _ids preserves all references
+        // (student/supervisor/semester) and the unique indexes.
+        await Promise.all([
+            User.deleteMany({}),
+            Semester.deleteMany({}),
+            Thesis.deleteMany({}),
+            Schedule.deleteMany({}),
+            ManualPlan.deleteMany({}),
+        ]);
+
         let restored = { users: 0, semesters: 0, theses: 0, schedules: 0 };
 
-        // Restore users
         if (Array.isArray(users) && users.length > 0) {
-            for (const u of users) {
-                await User.findByIdAndUpdate(u._id, { $set: u }, { upsert: true });
-            }
-            restored.users = users.length;
+            const inserted = await User.insertMany(users, { ordered: false });
+            restored.users = inserted.length;
         }
 
-        // Restore semesters
         if (Array.isArray(semesters) && semesters.length > 0) {
-            for (const s of semesters) {
-                await Semester.findByIdAndUpdate(s._id, { $set: s }, { upsert: true });
-            }
-            restored.semesters = semesters.length;
+            const inserted = await Semester.insertMany(semesters, { ordered: false });
+            restored.semesters = inserted.length;
         }
 
-        // Restore theses
         if (Array.isArray(theses) && theses.length > 0) {
-            for (const t of theses) {
-                await Thesis.findByIdAndUpdate(t._id, { $set: t }, { upsert: true });
-            }
-            restored.theses = theses.length;
+            const inserted = await Thesis.insertMany(theses, { ordered: false });
+            restored.theses = inserted.length;
         }
 
-        // Restore schedules
         if (Array.isArray(schedules) && schedules.length > 0) {
-            for (const s of schedules) {
-                await Schedule.findByIdAndUpdate(s._id, { $set: s }, { upsert: true });
-            }
-            restored.schedules = schedules.length;
+            const inserted = await Schedule.insertMany(schedules, { ordered: false });
+            restored.schedules = inserted.length;
         }
 
         res.status(200).json({

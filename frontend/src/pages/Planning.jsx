@@ -12,7 +12,7 @@ const Planning = () => {
     const [loading, setLoading] = useState(false);
     const [editingSchedule, setEditingSchedule] = useState(null);
     const [professors, setProfessors] = useState([]);
-    const [viewMode, setViewMode] = useState('timetable');
+    const [viewMode, setViewMode] = useState('manual');
     const [editForm, setEditForm] = useState({
         principal: '',
         examinator: '',
@@ -1046,7 +1046,7 @@ const Planning = () => {
                     </div>
                 )}
 
-                {schedules.length === 0 && !loading && <Alert variant="info" className="text-center mt-4">No schedules planned yet. Click "Run Auto-Planning" to generate schedules!</Alert>}
+                {viewMode !== 'manual' && schedules.length === 0 && !loading && <Alert variant="info" className="text-center mt-4">No schedules planned yet. Click "Run Auto-Planning" to generate schedules!</Alert>}
             </Container>
         </Container>
     );

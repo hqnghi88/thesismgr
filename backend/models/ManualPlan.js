@@ -65,6 +65,12 @@ const manualPlanSchema = new mongoose.Schema(
             unique: true,
         },
         days: [daySchema],
+        unassignedThesisIds: [
+            {
+                type: mongoose.Schema.Types.ObjectId,
+                ref: "Thesis",
+            },
+        ],
     },
     { timestamps: true }
 );

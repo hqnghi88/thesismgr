@@ -1,10 +1,18 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
-import { Container, Row, Col, Card, Button, Form, Alert, Badge, Dropdown } from "react-bootstrap";
+import { Container, Row, Col, Card, Button, Form, Alert, Badge, Dropdown, Table } from "react-bootstrap";
 import { useNotification } from "../context/NotificationContext";
 import { useSemester } from "../context/SemesterContext";
 
 const DEFAULT_ROOMS = ["Room 110/DI", "Room 111/DI", "Room 112/DI", "Room 113/DI"];
+
+const TIME_SLOTS = {
+    Sang: ['07h15', '07h50', '08h25', '09h00', '09h35', '10h10'],
+    Chieu: ['13h30', '14h05', '14h40', '15h15', '15h50', '16h25'],
+};
+const DOW_LABELS = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+const lastName = (n) => { if (!n) return '—'; const p = n.trim().split(/\s+/); return p[p.length - 1]; };
+const roomNum = (r) => parseInt((r || '').match(/(\d+)/)?.[1] || '999');
 
 const ProfessorDropdown = ({ profs, value, label, bg, color, onSelect }) => {
     const [open, setOpen] = useState(false);
@@ -28,49 +36,6 @@ const ProfessorDropdown = ({ profs, value, label, bg, color, onSelect }) => {
     );
 };
 
-const CommitteeCard = ({ c, dayIdx, sessIdx, commIdx, professors, onSwap, onCardClick, isMoving }) => (
-    <div
-        className={`border rounded shadow-sm bg-white overflow-hidden ${isMoving ? 'border-danger animate-pulse' : ''}`}
-        style={{ width: '280px', cursor: 'pointer' }}
-        onClick={() => onCardClick(dayIdx, sessIdx, commIdx)}
-    >
-        <div className="d-flex justify-content-between align-items-center px-2 py-1 border-bottom bg-light">
-            <span className="small fw-bold text-muted">{c.room || `Committee ${commIdx + 1}`}</span>
-            <span className="d-inline-flex align-items-center gap-1">
-                <Badge bg="secondary">{c.courseCode || 'No code'}</Badge>
-                <Badge bg="primary">{c.thesisIds?.length || 0}</Badge>
-            </span>
-        </div>
-        <div className="d-flex align-items-center gap-1 px-2 py-2 border-bottom" style={{ backgroundColor: '#f0fdf4' }}>
-            <span style={{ fontSize: '0.7rem', color: '#16a34a', fontWeight: 700, minWidth: '24px' }}>SV</span>
-            <span className="fw-bold text-success text-truncate" title={c.principal?.name} style={{ fontSize: '0.9rem' }}>{c.principal?.name || '—'}</span>
-        </div>
-        <div className="border-bottom" onClick={(e) => e.stopPropagation()}>
-            <ProfessorDropdown
-                label="M2"
-                bg="#eff6ff"
-                color="#1d4ed8"
-                value={c.examinator}
-                profs={professors}
-                onSelect={(pid) => onSwap(dayIdx, sessIdx, commIdx, 'examinator', pid)}
-            />
-        </div>
-        <div onClick={(e) => e.stopPropagation()}>
-            <ProfessorDropdown
-                label="M3"
-                bg="#faf5ff"
-                color="#7c3aed"
-                value={c.supervisor}
-                profs={professors}
-                onSelect={(pid) => onSwap(dayIdx, sessIdx, commIdx, 'supervisor', pid)}
-            />
-        </div>
-        {isMoving && (
-            <div className="text-center bg-danger text-white small fw-bold py-1">PICKED UP</div>
-        )}
-    </div>
-);
-
 const ManualPlanning = () => {
     const { notify, confirm } = useNotification();
     const { activeSemester } = useSemester();
@@ -80,6 +45,7 @@ const ManualPlanning = () => {
     const [loading, setLoading] = useState(false);
     const [professors, setProfessors] = useState([]);
     const [movingRef, setMovingRef] = useState(null);
+    const [editingCell, setEditingCell] = useState(null);
     const [controls, setControls] = useState({
         startDate: new Date().toISOString().slice(0, 10),
         capacity: 6,
@@ -121,15 +87,16 @@ const ManualPlanning = () => {
         fetchPlan();
     }, [activeSemester]);
 
-    const savePlan = async (days) => {
+    const savePlan = async (days, unassigned, skipFetch) => {
         try {
             await axios.put(`${import.meta.env.VITE_API_URL}/api/manual-plan`, {
                 semester: activeSemester._id,
                 days,
+                unassignedThesisIds: unassigned ?? plan?.unassignedThesisIds ?? [],
             }, {
                 headers: { Authorization: `Bearer ${token}` },
             });
-            fetchPlan();
+            if (!skipFetch) fetchPlan();
         } catch (err) {
             notify(err.response?.data?.message || "Error updating plan");
             fetchPlan();
@@ -179,10 +146,65 @@ const ManualPlanning = () => {
         savePlan(days);
     };
 
-    // Click-to-move/swap, mirroring the timetable: click a committee to pick it
-    // up, click another committee to swap their slots, or click an empty slot to
-    // move it there.
-    const handleSlotClick = (dayIdx, sessIdx, commIdx) => {
+    // Minus: split 1 thesis off into a new committee in the same room
+    const handleThesisSplit = (dayIdx, sessIdx, commIdx) => {
+        if (!plan) return;
+        const days = plan.days.map(d => ({
+            ...d,
+            sessions: d.sessions.map(s => ({ ...s, committees: s.committees.map(c => ({ ...c })) })),
+        }));
+        const sess = days[dayIdx].sessions[sessIdx];
+        const comm = sess.committees[commIdx];
+        if (!comm.thesisIds || comm.thesisIds.length === 0) return;
+
+        // Pop the last thesis from this committee
+        const splitThesis = comm.thesisIds.pop();
+
+        // Create a new committee with that 1 thesis, same room, same course
+        const newComm = {
+            room: comm.room,
+            courseCode: comm.courseCode,
+            principal: comm.principal,
+            examinator: comm.examinator,
+            supervisor: comm.supervisor,
+            thesisIds: [splitThesis],
+        };
+
+        // Insert new committee into the session
+        sess.committees.push(newComm);
+
+        setPlan({ ...plan, days });
+        savePlan(days, undefined, true);
+    };
+
+    const handleReturnAllToPool = null; // removed — pool concept dropped
+
+    // Shift+click merge: merge source into target (combine theses, keep target's room/members)
+    const handleMerge = (dayIdx, sessIdx, commIdx) => {
+        if (!plan || !movingRef || !activeSemester?._id) return;
+        const days = plan.days.map(d => ({
+            ...d,
+            sessions: d.sessions.map(s => ({ ...s, committees: s.committees.map(c => ({ ...c })) })),
+        }));
+        const srcSess = days[movingRef.dayIdx].sessions[movingRef.sessIdx];
+        const srcComm = srcSess.committees[movingRef.commIdx];
+        const dstSess = days[dayIdx].sessions[sessIdx];
+        const dstComm = dstSess.committees[commIdx];
+
+        // Merge: combine thesisIds into target, remove source
+        dstComm.thesisIds = [...(dstComm.thesisIds || []), ...(srcComm.thesisIds || [])];
+        srcSess.committees.splice(movingRef.commIdx, 1);
+
+        setPlan({ ...plan, days });
+        setMovingRef(null);
+        setEditingCell(null);
+        savePlan(days);
+    };
+
+    // Click-to-move/swap: click a committee to pick it up, click another
+    // committee to swap, or click an empty cell to move the committee there.
+    // `targetRoom` is the room of the clicked cell (from the grid).
+    const handleSlotClick = (dayIdx, sessIdx, commIdx, targetRoom, targetSlotIdx) => {
         if (!plan || !activeSemester?._id) return;
         if (!movingRef) {
             if (commIdx !== null) setMovingRef({ dayIdx, sessIdx, commIdx });
@@ -199,20 +221,66 @@ const ManualPlanning = () => {
         }));
         const srcSess = days[movingRef.dayIdx].sessions[movingRef.sessIdx];
         const srcComm = srcSess.committees[movingRef.commIdx];
+        const dstSess = days[dayIdx].sessions[sessIdx];
 
         if (commIdx !== null) {
-            const dstSess = days[dayIdx].sessions[sessIdx];
+            // Swapping with another committee
             const dstComm = dstSess.committees[commIdx];
-            const srcRoom = srcComm.room;
-            srcComm.room = dstComm.room;
-            dstComm.room = srcRoom;
-            dstSess.committees[commIdx] = srcComm;
-            srcSess.committees[movingRef.commIdx] = dstComm;
+
+            if (srcSess === dstSess && srcComm.room !== dstComm.room) {
+                // Same session, different rooms: rebuild array so each committee
+                // lands at the other's original slot within its new room.
+                const byRoom = {};
+                dstSess.committees.forEach((c, i) => {
+                    const r = c.room || 'Unknown';
+                    if (!byRoom[r]) byRoom[r] = [];
+                    byRoom[r].push({ c, idx: i });
+                });
+                const srcOrigSlot = byRoom[srcComm.room]?.findIndex(e => e.idx === movingRef.commIdx) ?? 0;
+                const dstOrigSlot = byRoom[dstComm.room]?.findIndex(e => e.idx === commIdx) ?? 0;
+
+                const origSrcRoom = srcComm.room;
+                srcComm.room = dstComm.room;
+                dstComm.room = origSrcRoom;
+
+                const remaining = dstSess.committees.filter((_, i) => i !== movingRef.commIdx && i !== commIdx);
+                const newGroups = {};
+                remaining.forEach(c => {
+                    if (!newGroups[c.room]) newGroups[c.room] = [];
+                    newGroups[c.room].push(c);
+                });
+                if (!newGroups[srcComm.room]) newGroups[srcComm.room] = [];
+                if (!newGroups[dstComm.room]) newGroups[dstComm.room] = [];
+                newGroups[srcComm.room].splice(dstOrigSlot, 0, srcComm);
+                newGroups[dstComm.room].splice(srcOrigSlot, 0, dstComm);
+
+                dstSess.committees = Object.keys(newGroups)
+                    .sort((a, b) => roomNum(a) - roomNum(b))
+                    .flatMap(r => newGroups[r]);
+            } else {
+                // Same room or different sessions: simple room+position swap
+                const srcRoom = srcComm.room;
+                srcComm.room = dstComm.room;
+                dstComm.room = srcRoom;
+                dstSess.committees[commIdx] = srcComm;
+                srcSess.committees[movingRef.commIdx] = dstComm;
+            }
         } else {
-            const dstSess = days[dayIdx].sessions[sessIdx];
+            // Move to empty slot — use the target room from the grid cell
             srcSess.committees.splice(movingRef.commIdx, 1);
-            srcComm.room = DEFAULT_ROOMS[dstSess.committees.length] || `Room ${dstSess.committees.length + 1}`;
-            dstSess.committees.push(srcComm);
+            srcComm.room = targetRoom || srcComm.room;
+            // Rebuild source session groups and insert at the correct slot
+            const srcGroups = {};
+            srcSess.committees.forEach(c => {
+                if (!srcGroups[c.room]) srcGroups[c.room] = [];
+                srcGroups[c.room].push(c);
+            });
+            if (!srcGroups[srcComm.room]) srcGroups[srcComm.room] = [];
+            const insAt = typeof targetSlotIdx === 'number' ? targetSlotIdx : srcGroups[srcComm.room].length;
+            srcGroups[srcComm.room].splice(insAt, 0, srcComm);
+            srcSess.committees = Object.keys(srcGroups)
+                .sort((a, b) => roomNum(a) - roomNum(b))
+                .flatMap(r => srcGroups[r]);
         }
 
         setPlan({ ...plan, days });
@@ -282,6 +350,11 @@ const ManualPlanning = () => {
     }
     const courseCodes = Object.keys(courseSections).sort();
     const maxPerSession = plan ? plan.days.reduce((mx, d) => d.sessions.reduce((m, s) => Math.max(m, s.committees.length), mx), 1) : 1;
+    const dropTargetCount = movingRef && plan ? plan.days.reduce((sum, d, di) => d.sessions.reduce((s, sess, si) => {
+        if (di === movingRef.dayIdx && si === movingRef.sessIdx) return s;
+        return s + Math.max(0, maxPerSession - sess.committees.length);
+    }, sum), 0) : 0;
+    const isSourceSession = (slot) => movingRef && slot.dayIdx === movingRef.dayIdx && slot.sessIdx === movingRef.sessIdx;
 
     return (
         <Container fluid className="py-4">
@@ -349,17 +422,29 @@ const ManualPlanning = () => {
                             <Badge bg="secondary">{totalTheses} theses planned</Badge>
                             <Button variant="outline-primary" size="sm" onClick={handleExport}>📥 Export Excel</Button>
                             <Button variant="outline-danger" size="sm" onClick={handleClear}>🗑 Delete Plan</Button>
-                            {movingRef && (
-                                <Button variant="outline-warning" size="sm" onClick={() => setMovingRef(null)}>✖ Cancel Move</Button>
+                    {movingRef && (
+                        <>
+                            <Button variant="outline-warning" size="sm" onClick={() => setMovingRef(null)}>✖ Cancel Move</Button>
+                            {dropTargetCount === 0 && (
+                                <Alert variant="warning" className="mb-0 small" style={{ padding: '0.4rem 0.75rem' }}>
+                                    No empty slot in another session — click another committee's <b>✋ Move</b> to swap their slots instead.
+                                </Alert>
                             )}
-                        </div>
+                            {dropTargetCount > 0 && (
+                                <Alert variant="info" className="mb-0 small" style={{ padding: '0.4rem 0.75rem' }}>
+                                    Click an <b>empty slot (CLICK TO MOVE HERE)</b> in another session to move the committee there, or click another committee's <b>✋ Move</b> to swap.
+                                </Alert>
+                            )}
+                        </>
                     )}
-                    {plan && (
-                        <p className="text-muted small mt-3 mb-0">
-                            💡 Click a committee to pick it up, then click <b>another committee to swap</b> slots or an
-                            <b> empty slot to move</b> it there.
-                        </p>
-                    )}
+                </div>
+            )}
+            {plan && (
+                <p className="text-muted small mt-3 mb-0">
+                    💡 Click a committee to pick it up, click another to swap, or click an empty slot to move.
+                    Hold <b>Shift + click</b> to merge into target. Click the <b>thesis count number</b> to split.
+                </p>
+            )}
                 </Card.Body>
             </Card>
 
@@ -377,53 +462,171 @@ const ManualPlanning = () => {
 
             {plan && courseCodes.map(code => {
                 const items = courseSections[code];
-                // Group items by date + session to preserve the day structure.
-                const slots = [];
+                const dayMap = {};
                 items.forEach(item => {
-                    const key = `${dateLabel(item.day.date)}|${item.sess.session}`;
-                    const found = slots.find(s => s.key === key);
-                    if (found) found.items.push(item);
-                    else slots.push({ key, label: dateLabel(item.day.date), session: item.sess.session, dayIdx: item.dayIdx, sessIdx: item.sessIdx, items: [item] });
+                    const dl = dateLabel(item.day.date);
+                    if (!dayMap[dl]) dayMap[dl] = { dl, date: item.day.date, dayIdx: item.dayIdx };
                 });
+                const dayEntries = Object.values(dayMap).sort((a, b) => new Date(a.date) - new Date(b.date));
+                const totalTh = items.reduce((s, i) => s + (i.c.thesisIds?.length || 0), 0);
+                // Collect ALL rooms used across ALL courses in ALL days/sessions
+                // so that empty rooms keep their columns visible (drop targets).
+                const allCourseRooms = [...new Set(
+                    plan.days.flatMap(d => d.sessions.flatMap(s => s.committees.map(c => c.room).filter(Boolean)))
+                )].sort((a, b) => roomNum(a) - roomNum(b));
                 return (
                     <Card key={code} className="border-0 shadow-sm mb-4">
                         <Card.Header className="bg-white fw-bold text-secondary border-bottom d-flex justify-content-between align-items-center">
                             <span>📚 Course {code}</span>
-                            <Badge bg="primary">{items.reduce((s, i) => s + (i.c.thesisIds?.length || 0), 0)} theses</Badge>
+                            <Badge bg="primary">{totalTh} theses</Badge>
                         </Card.Header>
                         <Card.Body>
-                            {slots.map(slot => (
-                                <div key={slot.key} className="mb-4">
-                                    <h6 className={`fw-bold mb-2 ${slot.session === "Sang" ? "text-primary" : "text-warning"}`}>
-                                        🗓️ Ngay {slot.label} · {slot.session}
-                                    </h6>
-                                    <div className="d-flex flex-wrap gap-3">
-                                        {slot.items.map(item => (
-                                            <CommitteeCard
-                                                key={item.c._id || item.commIdx}
-                                                c={item.c}
-                                                dayIdx={item.dayIdx}
-                                                sessIdx={item.sessIdx}
-                                                commIdx={item.commIdx}
-                                                professors={professors}
-                                                onSwap={quickSwapMember}
-                                                onCardClick={handleSlotClick}
-                                                isMoving={movingRef && movingRef.dayIdx === item.dayIdx && movingRef.sessIdx === item.sessIdx && movingRef.commIdx === item.commIdx}
-                                            />
-                                        ))}
-                                        {Array.from({ length: Math.max(0, maxPerSession - slot.items.length) }).map((_, i) => (
-                                            <div
-                                                key={`empty-${i}`}
-                                                className={`border rounded d-flex align-items-center justify-content-center ${movingRef ? 'border-success text-success' : 'border-secondary text-muted'}`}
-                                                style={{ width: '280px', minHeight: '168px', cursor: 'pointer', borderStyle: 'dashed', background: movingRef ? '#f0fdf4' : '#f8f9fa' }}
-                                                onClick={() => handleSlotClick(slot.dayIdx, slot.sessIdx, null)}
-                                            >
-                                                {movingRef ? <span className="fw-bold small">CLICK TO MOVE HERE</span> : <span className="small">empty slot</span>}
-                                            </div>
-                                        ))}
+                            {dayEntries.map(dayEntry => {
+                                const dow = DOW_LABELS[new Date(dayEntry.date).getDay()];
+                                const day = plan.days[dayEntry.dayIdx];
+                                return (
+                                    <div key={dayEntry.dl} className="mb-3">
+                                        <h6 className="fw-bold text-secondary mb-2">📅 {dow} | {dayEntry.dl}</h6>
+                                        {day.sessions.map((sess, sessIdx) => {
+                                            const sessName = sess.session || (sessIdx === 0 ? 'Sang' : 'Chieu');
+                                            const courseComms = sess.committees
+                                                .map((c, commIdx) => ({ c, commIdx }))
+                                                .filter(({ c }) => (c.courseCode || 'No code') === code);
+                                            if (courseComms.length === 0) return null;
+                                            const byRoom = {};
+                                            courseComms.forEach(({ c, commIdx }) => {
+                                                const r = c.room || 'Unknown';
+                                                if (!byRoom[r]) byRoom[r] = [];
+                                                byRoom[r].push({ c, commIdx, dayIdx: dayEntry.dayIdx, sessIdx });
+                                            });
+                                            const rooms = allCourseRooms;
+                                            const slots = TIME_SLOTS[sessName] || TIME_SLOTS.Sang;
+                                            return (
+                                                <div key={sessIdx} className="mb-2">
+                                                    <div className={`fw-bold small mb-1 ${sessName === 'Sang' ? 'text-primary' : 'text-warning'}`}>{sessName}</div>
+                                                    <Table bordered size="sm" className="align-middle mb-0" style={{ width: 'auto' }}>
+                                                        <thead>
+                                                            <tr>
+                                                                <th rowSpan={2} className="text-center" style={{ width: '80px' }}>Thời gian</th>
+                                                                {rooms.map(room => (
+                                                                    <th key={room} colSpan={3} className="text-center bg-light" style={{ width: `${rooms.length > 1 ? 180 : 240}px` }}>{room}</th>
+                                                                ))}
+                                                            </tr>
+                                                            <tr>
+                                                                {rooms.map(room => (
+                                                                    <React.Fragment key={`sub-${room}`}>
+                                                                        <th className="text-center" style={{ color: '#16a34a', fontSize: '0.75rem' }}>GVHD</th>
+                                                                        <th className="text-center" style={{ color: '#1d4ed8', fontSize: '0.75rem' }}>UV</th>
+                                                                        <th className="text-center" style={{ color: '#7c3aed', fontSize: '0.75rem' }}>CT</th>
+                                                                    </React.Fragment>
+                                                                ))}
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {slots.map((time, slotIdx) => (
+                                                                <tr key={slotIdx} style={{ minHeight: '32px' }}>
+                                                                    <td className="text-center fw-bold text-muted small">{time}</td>
+                                                                    {rooms.map(room => {
+                                                                        const entry = byRoom[room]?.[slotIdx];
+                                                                        if (!entry) {
+                                                                            return (
+                                                                                <React.Fragment key={`e-${room}-${slotIdx}`}>
+                                                                                    <td className={`text-center small ${movingRef ? 'text-success' : ''}`}
+                                                                                        style={{ cursor: movingRef ? 'pointer' : 'default', background: movingRef ? '#f0fdf4' : undefined, minWidth: '60px' }}
+                                                                                        onClick={() => movingRef && handleSlotClick(dayEntry.dayIdx, sessIdx, null, room, slotIdx)}>
+                                                                                        {movingRef && slotIdx === 0 ? <span className="fw-bold">CLICK</span> : ''}
+                                                                                    </td>
+                                                                                    <td className={`text-center small ${movingRef ? 'text-success' : ''}`}
+                                                                                        style={{ cursor: movingRef ? 'pointer' : 'default', background: movingRef ? '#f0fdf4' : undefined, minWidth: '60px' }}
+                                                                                        onClick={() => movingRef && handleSlotClick(dayEntry.dayIdx, sessIdx, null, room, slotIdx)}>
+                                                                                    </td>
+                                                                                    <td className={`text-center small ${movingRef ? 'text-success' : ''}`}
+                                                                                        style={{ cursor: movingRef ? 'pointer' : 'default', background: movingRef ? '#f0fdf4' : undefined, minWidth: '60px' }}
+                                                                                        onClick={() => movingRef && handleSlotClick(dayEntry.dayIdx, sessIdx, null, room, slotIdx)}>
+                                                                                    </td>
+                                                                                </React.Fragment>
+                                                                            );
+                                                                        }
+                                                                        const { c, commIdx, dayIdx, sessIdx: si } = entry;
+                                                                        const isMoving = movingRef &&
+                                                                            movingRef.dayIdx === dayIdx && movingRef.sessIdx === si && movingRef.commIdx === commIdx;
+                                                                        const cellBg = isMoving ? '#fff5f5' : undefined;
+                                                                        const cellStyle = { cursor: 'pointer', background: cellBg };
+                                                                        const isEditing = editingCell &&
+                                                                            editingCell.dayIdx === dayIdx && editingCell.sessIdx === si && editingCell.commIdx === commIdx;
+                                                                        const handleCellClick = (e) => {
+                                                                            if (movingRef && e.shiftKey) {
+                                                                                e.stopPropagation();
+                                                                                handleMerge(dayIdx, si, commIdx);
+                                                                                return;
+                                                                            }
+                                                                            handleSlotClick(dayIdx, si, commIdx);
+                                                                        };
+                                                                        return (
+                                                                            <React.Fragment key={`c-${room}-${slotIdx}`}>
+                                                                                <td style={cellStyle} onClick={handleCellClick} className="position-relative">
+                                                                                    <span
+                                                                                        className="fw-bold"
+                                                                                        style={{ textDecoration: 'underline', cursor: 'pointer' }}
+                                                                                        onClick={(e) => { e.stopPropagation(); setEditingCell(isEditing ? null : { dayIdx, sessIdx: si, commIdx }); }}
+                                                                                    >{c.thesisIds?.length || 0}</span>{' '}
+                                                                                    <span className="text-danger fw-bold">{lastName(c.principal?.name)}</span>
+                                                                                    {isMoving && <span className="ms-1">✋</span>}
+                                                                                    {isEditing && (
+                                                                                        <div
+                                                                                            className="position-absolute bg-white border rounded shadow-sm p-2"
+                                                                                            style={{ zIndex: 1050, top: '100%', left: 0, minWidth: '160px' }}
+                                                                                            onClick={(e) => e.stopPropagation()}
+                                                                                        >
+                                                                                            <div className="d-flex align-items-center gap-2 mb-2">
+                                                                                                <span className="fw-bold">{c.thesisIds?.length || 0} theses</span>
+                                                                                            </div>
+                                                                                            {(c.thesisIds?.length || 0) > 1 && (
+                                                                                                <Button size="sm" variant="outline-danger" className="w-100"
+                                                                                                    onClick={() => { handleThesisSplit(dayIdx, si, commIdx); }}>
+                                                                                                    Split off 1 → new committee
+                                                                                                </Button>
+                                                                                            )}
+                                                                                        </div>
+                                                                                    )}
+                                                                                </td>
+                                                                                <td style={cellStyle} onClick={handleCellClick}>
+                                                                                    <div onClick={(e) => e.stopPropagation()}>
+                                                                                    <ProfessorDropdown
+                                                                                        profs={professors}
+                                                                                        value={c.examinator}
+                                                                                        label="UV"
+                                                                                        bg="#eff6ff"
+                                                                                        color="#1d4ed8"
+                                                                                        onSelect={(id) => quickSwapMember(dayIdx, si, commIdx, 'examinator', id)}
+                                                                                    />
+                                                                                    </div>
+                                                                                </td>
+                                                                                <td style={cellStyle} onClick={handleCellClick}>
+                                                                                    <div onClick={(e) => e.stopPropagation()}>
+                                                                                    <ProfessorDropdown
+                                                                                        profs={professors}
+                                                                                        value={c.supervisor}
+                                                                                        label="CT"
+                                                                                        bg="#f5f3ff"
+                                                                                        color="#7c3aed"
+                                                                                        onSelect={(id) => quickSwapMember(dayIdx, si, commIdx, 'supervisor', id)}
+                                                                                    />
+                                                                                    </div>
+                                                                                </td>
+                                                                            </React.Fragment>
+                                                                        );
+                                                                    })}
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </Table>
+                                                </div>
+                                            );
+                                        })}
                                     </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </Card.Body>
                     </Card>
                 );
